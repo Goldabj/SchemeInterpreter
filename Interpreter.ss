@@ -24,7 +24,7 @@
     [var-exp (id symbol?)]
     [variable (var symbol?)]
     [lambda-exp
-        (vars (lambda (x) (or (null? x) (expression? x) ((list-of expression?) x))))
+        (vars (lambda (x) (or  (and (pair? x) (not (list? x))) (null? x) (symbol? x) ((list-of symbol?) x))))
         (body (list-of expression?))]
     [app-exp
         (rator expression?)
@@ -72,7 +72,7 @@
   [prim-proc
    (name in-prim?)]
    [closure
-   (vars (lambda (x) (or (null? x) (expression? x) ((list-of expression?) x))))
+   (vars (lambda (x) (or  (and (pair? x) (not (list? x))) (null? x) (symbol? x) ((list-of symbol?) x))))
    (bodies (list-of expression?))
    (env environment?)])
 
@@ -121,9 +121,9 @@
                             (eopl:error 'parse-exp "lambda's formal arguments ~s must all be symbols" (2nd datum))]
                         [else 
                           (if (list? (2nd datum))
-                             (lambda-exp (map variable (2nd datum)) ; (lambda (x) body ...) expression (adds paren around body)
+                             (lambda-exp (2nd datum) ; (lambda (x) body ...) expression (adds paren around body)
                                  (map parse-exp (cddr datum)))
-                             (lambda-exp (variable (2nd datum)) ; (lambda x body ...) expression (adds paren around body)
+                             (lambda-exp (2nd datum) ; (lambda x body ...) expression (adds paren around body)
                                 (map parse-exp (cddr datum))))])]
                 [(eqv? (car datum) 'let)
                     (cond [(< (length datum) 3) (eopl:error 'parse-exp "~s-expression has incorrect length ~s" (car datum) datum)]
@@ -188,7 +188,7 @@
       (cond
         [(eqv? (car datum) 'var-exp) (2nd datum)]
         [(eqv? (car datum) 'lambda-exp)
-                (append (list 'lambda (unparse-exp (2nd datum))) (unparse-exp (3rd datum)))]
+                (append (list 'lambda (2nd datum)) (unparse-exp (3rd datum)))]
         [(eqv? (car datum) 'app-exp) (append (list (unparse-exp (2nd datum))) (unparse-exp (3rd datum)))]
         [(eqv? (car datum) 'variable) (2nd datum)]
         [(eqv? (car datum) 'lit-exp) (2nd datum)]
@@ -351,27 +351,32 @@
 (define apply-proc
   (lambda (proc-value args)
     (cases proc-val proc-value
-      [closure (vars bodies env) (eval-bodies bodies (extend-env (unparse-exp vars) args env))]
+      [closure (vars bodies env) 
+            (let* ([vars-args (flatten-vars-args vars args)]
+                    [vars (car vars-args)]
+                    [args (cadr vars-args)])
+                (eval-bodies bodies (extend-env vars args env)))]
       [prim-proc (op) (apply-prim-proc op args)]
 			; You will add other cases
       [else (eopl:error 'apply-proc
                    "Attempt to apply bad procedure: ~s" 
                     proc-value)])))
 
-(define flatten-vars-args
+(define flatten-vars-args 
     (lambda (vars args)
         (cond 
-            [(null? vars) '()]
-            [(list? vars) (cons vars args)]
-            [(atom? vars) (cons (list vars) (list args))]
-            [else (cons (flatten-vars vars) (flatten-vars args))])))
-
-(define flatten-vars 
-    (lambda (vars)
-        (cond 
-            [(null? vars) '()]
-            [(atom? vars) vars]
-            [(list? vars) (cons (flatten-vars (car vars)) (flatten-vars (cdr vars)))])))
+            [(null? vars) (if (not (null? args)) 
+                                (eopl:error 'flatten-vars-args "lamnbda expexted no args, but got ~s" args)
+                                (list '() '()))]
+            [(symbol? vars) (list (list vars) (list args))]
+            [(symbol? (car vars)) (if (and (null? (cdr vars)) (not (null? (cdr args))))
+                                    (eopl:error 'flatten-vars-args "incorrect amount of arguments to procedure ~s" args)
+                                    (if (not (pair? (cdr vars)))
+                                        (if (null? (cdr args))
+                                            (list (list (car vars)) args)
+                                            (list (list (car vars) (cdr vars)) (cons (car args) (list (cdr args)))))
+                                        (let ([final-vars-args (flatten-vars-args (cdr vars) (cdr args))])
+                                          (list (cons (car vars) (car final-vars-args)) (cons (car args) (cadr final-vars-args))))))])))
 
 (define eval-bodies 
     (lambda (bodies env)
