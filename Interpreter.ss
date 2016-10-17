@@ -51,6 +51,7 @@
         (var symbol?)
         (value expression?)]
 <<<<<<< HEAD
+<<<<<<< HEAD
     [begin-exp
         (body (list-of expression?))]
     [or-exp
@@ -61,6 +62,8 @@
     [or-exp 
         (tests (list-of expression?))]
 >>>>>>> b482a8b957a4b50ea54066510d67988dc49b22b3
+=======
+>>>>>>> parent of 0286945... Added begin and or to syntax-expand
     [cond-exp 
         (cases (list-of (lambda (all-cases) (list-of (lambda (single-case) 
                             (and ((list-of expression?) (car x)) ((list-of expression?) (cadr x))))))))])
@@ -188,11 +191,10 @@
                     (cond [(not (equal? (length datum) 3)) (eopl:error 'parse-exp "set! expression ~s does not have (only) variable and expression" datum)]
                         [else 
                              (set!-exp (2nd datum) (parse-exp (3rd datum)))])] ; (set! var val) expression
-                [(eqv? (car datum) 'begin)
-                    (begin-exp (map parse-exp (cdr datum)))]
                 [(eqv? (car datum) 'cond)
 <<<<<<< HEAD
                     (cond-exp (list (map (lambda (x) (list (parse-exp (car x)) (list (parse-exp (cdr x))))) (cdr datum))))]
+<<<<<<< HEAD
                 [(eqv? (car datum) 'or) 
 =======
                     (cond-exp (map (lambda (x) (list (parse-exp (car x)) (list (map parse-exp (cdr x))))) (cdr datum)))]
@@ -201,9 +203,10 @@
                 [(eqv? (car datum) 'or)
 >>>>>>> b482a8b957a4b50ea54066510d67988dc49b22b3
                     (or-exp (map parse-exp (cdr datum)))]
+=======
+>>>>>>> parent of 0286945... Added begin and or to syntax-expand
                 [else (app-exp (parse-exp (1st datum)) ; (x y z ...) expression (x is a procedure, y z ... are paremeters)
 		            (map parse-exp (cdr datum)))])]
-                
         [else (eopl:error 'parse-exp "bad expression: ~s" datum)])))
 
 
@@ -230,10 +233,9 @@
             (append (list 'if (unparse-exp (2nd datum))) (list (unparse-exp (3rd datum)) (unparse-exp (cadddr datum))))]
         [(eqv? (car datum) 'set!-exp)
             (list 'set! (unparse-exp (2nd datum)))] ; (set! var val) expression
-        [(eqv? (car datum) 'begin-exp)
-            (cons 'begin (map unparse-exp (2nd datum)))]
         [((list-of list?) datum) (append (list (unparse-exp (car datum))) (unparse-exp (cdr datum)))]
         [(eqv? (car datum) 'prim-proc) (2nd datum)]
+<<<<<<< HEAD
 <<<<<<< HEAD
         [(eqv? (car datum) 'or-exp)
             (cons 'or (unparse-exp (2nd datum)))]
@@ -243,6 +245,8 @@
         [(eqv? (car datum) 'and-exp) (apply list 'and (map unparse-exp (2nd datum)))]
         [(eqv? (car datum) 'or-exp) (apply list 'or (map unparse-exp (2nd datum)))]
 >>>>>>> b482a8b957a4b50ea54066510d67988dc49b22b3
+=======
+>>>>>>> parent of 0286945... Added begin and or to syntax-expand
         [else #f])])))
 
 
@@ -341,6 +345,7 @@
             [set!-exp (new-val value)
                 (set!-exp new-val (syntax-expand value))]
 <<<<<<< HEAD
+<<<<<<< HEAD
             [begin-exp (list-of-bodies)
                 (lambda-exp '() list-of-bodies)]
             [or-exp (list-of-exp)
@@ -380,6 +385,8 @@
                                                     (parse-cond (cdr cases))))))])
                     (parse-cond cases))]                                       
 >>>>>>> b482a8b957a4b50ea54066510d67988dc49b22b3
+=======
+>>>>>>> parent of 0286945... Added begin and or to syntax-expand
             [else (eopl:error 'syntax-expand "not an expression ~s" exp)])))
 
 
