@@ -52,6 +52,8 @@
         (tests (list-of expression?))]
     [or-exp 
         (tests (list-of expression?))]
+     [begin-exp
+         (body (list-of expression?))]
     [cond-exp 
         (cases (list-of (lambda (all-cases) (list-of (lambda (single-case) 
                             (and ((list-of expression?) (car x)) ((list-of expression?) (cadr x))))))))])
@@ -185,6 +187,8 @@
                     (and-exp (map parse-exp (cdr datum)))]
                 [(eqv? (car datum) 'or)
                     (or-exp (map parse-exp (cdr datum)))]
+                [(eqv? (car datum) 'begin)
+                    (begin-exp (map parse-exp (cdr datum)))]
                 [else (app-exp (parse-exp (1st datum)) ; (x y z ...) expression (x is a procedure, y z ... are paremeters)
 		            (map parse-exp (cdr datum)))])]
         [else (eopl:error 'parse-exp "bad expression: ~s" datum)])))
@@ -215,6 +219,8 @@
             (list 'set! (unparse-exp (2nd datum)))] ; (set! var val) expression
         [((list-of list?) datum) (append (list (unparse-exp (car datum))) (unparse-exp (cdr datum)))]
         [(eqv? (car datum) 'prim-proc) (2nd datum)]
+         [(eqv? (car datum) 'begin-exp)
+            (cons 'begin (map unparse-exp (2nd datum)))]
         [(eqv? (car datum) 'cond-exp) (cons 'cond (map (lambda (case) (apply cons (unparse-exp (car case)) 
                                                          (car (map unparse-exp (cdr case))))) (cadr datum)))]
         [(eqv? (car datum) 'and-exp) (apply list 'and (map unparse-exp (2nd datum)))]
@@ -332,6 +338,8 @@
                                                 (parse-exp '#t)
                                                 (parse-or (cdr tests)))))])
                         (parse-or tests))]
+            [begin-exp (list-of-bodies)
+                  (lambda-exp '() list-of-bodies)]
             [cond-exp (cases)
                 (letrec ([parse-cond (lambda (cases)
                                         (if (equal? 'else (cadaar cases))
