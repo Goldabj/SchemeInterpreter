@@ -2,7 +2,8 @@
 ;; Easier to submit to server, probably harder to use in the development process
 ;; Brendan Goldacker and Cameron Metzger
 
-(load "C:/Users/goldacbj/Google Drive/Documents/CSSE/CSSE304/chez-init.ss") 
+;;(load "C:/Users/goldacbj/Google Drive/Documents/CSSE/CSSE304/chez-init.ss") 
+(load "C:/Users/metzgecj/Desktop/Year3/PLC/chez-init.ss") 
 
 ;-------------------+
 ;                   |
