@@ -49,7 +49,8 @@
         (var symbol?)
         (value expression?)]
     [cond-exp 
-        (cases (list-of (lambda (x) (and ((list-of expression?) (car x)) ((list-of expression?) (cadr x))))))])
+        (cases (list-of (lambda (all-cases) (list-of (lambda (single-case) 
+                            (and ((list-of expression?) (car x)) ((list-of expression?) (cadr x))))))))])
 
 	
 	
@@ -175,7 +176,7 @@
                         [else 
                              (set!-exp (2nd datum) (parse-exp (3rd datum)))])] ; (set! var val) expression
                 [(eqv? (car datum) 'cond)
-                    (cond-exp (list (map (lambda (x) (list (parse-exp (car x)) (list (parse-exp (cdr x))))) (cdr datum))))]
+                    (cond-exp (map (lambda (x) (list (parse-exp (car x)) (parse-exp (cadr x)))) (cdr datum)))]
                 [else (app-exp (parse-exp (1st datum)) ; (x y z ...) expression (x is a procedure, y z ... are paremeters)
 		            (map parse-exp (cdr datum)))])]
         [else (eopl:error 'parse-exp "bad expression: ~s" datum)])))
@@ -206,6 +207,8 @@
             (list 'set! (unparse-exp (2nd datum)))] ; (set! var val) expression
         [((list-of list?) datum) (append (list (unparse-exp (car datum))) (unparse-exp (cdr datum)))]
         [(eqv? (car datum) 'prim-proc) (2nd datum)]
+        [(eqv? (car datum) 'cond-exp) (apply list 'cond (map (lambda (case) (cons (unparse-exp (car case)) 
+                                                         (map unparse-exp (cdr case)))) (cadr datum)))]
         [else #f])])))
 
 
@@ -303,6 +306,17 @@
                                                   (parse-let* var-binds))]  
             [set!-exp (new-val value)
                 (set!-exp new-val (syntax-expand value))]
+            [cond-exp (cases)
+                (letrec ([parse-cond (lambda (cases)
+                                        (if (equal? 'else (cadaar cases))
+                                            (syntax-expand (cadar cases))
+                                            (if (null? (cdr cases))
+                                                (if-exp (syntax-expand (caar cases))
+                                                        (syntax-expand (cadar cases)))
+                                                (if-else-exp (syntax-expand (caar cases))
+                                                    (syntax-expand (cadar cases))
+                                                    (parse-cond (cdr cases))))))])
+                    (parse-cond cases))]                                        
             [else (eopl:error 'syntax-expand "not an expression ~s" exp)])))
 
 
