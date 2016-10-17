@@ -75,6 +75,12 @@
    (vars (lambda (x) (or (null? x) (expression? x) ((list-of expression?) x))))
    (bodies (list-of expression?))
    (env environment?)])
+
+(define procedure? 
+    (lambda (x)
+        (if (member x *prim-proc-names*)
+            #t
+            (proc-val? x))))
 	 
 	
 
@@ -197,6 +203,7 @@
         [(eqv? (car datum) 'set!-exp)
             (list 'set! (unparse-exp (2nd datum)))] ; (set! var val) expression
         [((list-of list?) datum) (append (list (unparse-exp (car datum))) (unparse-exp (cdr datum)))]
+        [(eqv? (car datum) 'prim-proc) (2nd datum)]
         [else #f])])))
 
 
@@ -376,7 +383,7 @@
 (define *prim-proc-names* '(+ - * / add1 sub1 zero? not = < > <= >= cons list null? assq eq? 
                             equal? atom? length list->vector list? pair? procedure? vector->list vector 
                             make-vector vector-ref vector? number? symbol? set-car! set-cdr! vector-set! 
-                            display newline car cdr caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr))
+                            display newline car cdr caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr apply map))
 
 (define *prim-proc-zero '(newline))
 
@@ -387,7 +394,7 @@
 
 (define *prim-proc-three '(vector-set!))
 
-(define *prim-proc-multiple '(+ - * / list vector))
+(define *prim-proc-multiple '(+ - * / list vector apply map))
 
 (define init-env         ; for now, our initial global environment only contains 
   (extend-env            ; procedure names.  Recall that an environment associates
@@ -434,7 +441,7 @@
                                                     [(vector?) (vector? (1st args))]
                                                     [(list?) (list? (1st args))]
                                                     [(pair?) (pair? (1st args))]
-                                                    [(procedure?) (proc-val? (1st args))]
+                                                    [(procedure?) (procedure? (1st args))]
                                                     [(vector->list) (vector->list (1st args))]
                                                     [(number?) (number? (1st args))]
                                                     [(symbol?) (symbol? (1st args))]
@@ -467,6 +474,8 @@
                                                     [(/) (apply / args)]
                                                     [(list) (apply list args)]
                                                     [(vector) (apply vector args)]
+                                                    [(apply) (apply (lambda (ls) (apply-prim-proc (unparse-exp (car args)) ls)) (cdr args))]
+                                                    [(map) (map (lambda (x) (apply-prim-proc (unparse-exp (car args)) (list (unparse-exp x)))) (cadr args))]
                                                     [else (eopl:error 'apply-prim-proc "programming error multiple")]))])))
         
 
