@@ -47,7 +47,9 @@
         (body (list-of expression?))]
     [set!-exp
         (var symbol?)
-        (value expression?)])
+        (value expression?)]
+    [cond-exp 
+        (cases (list-of (lambda (x) (and ((list-of expression?) (car x)) ((list-of expression?) (cadr x))))))])
 
 	
 	
@@ -172,6 +174,8 @@
                     (cond [(not (equal? (length datum) 3)) (eopl:error 'parse-exp "set! expression ~s does not have (only) variable and expression" datum)]
                         [else 
                              (set!-exp (2nd datum) (parse-exp (3rd datum)))])] ; (set! var val) expression
+                [(eqv? (car datum) 'cond)
+                    (cond-exp (list (map (lambda (x) (list (parse-exp (car x)) (list (parse-exp (cdr x))))) (cdr datum))))]
                 [else (app-exp (parse-exp (1st datum)) ; (x y z ...) expression (x is a procedure, y z ... are paremeters)
 		            (map parse-exp (cdr datum)))])]
         [else (eopl:error 'parse-exp "bad expression: ~s" datum)])))
@@ -291,8 +295,12 @@
             [if-exp (test then-exp)
                     (if-exp (syntax-expand test)
                                   (syntax-expand then-exp))]
-            [letrec-exp (var-binds body) (app-exp (lambda-exp (get-var-binds var-binds) (map syntax-expand bodies)) (map syntax-expand (get-binds var-binds)))]
-            [let*-exp (var-binds body) (app-exp (lambda-exp (get-var-binds var-binds) (map syntax-expand bodies)) (map syntax-expand (get-binds var-binds)))]
+            [letrec-exp (var-binds body) (letrec-exp (map (lambda (var-bind) (list (car var-bind) (syntax-expand (cadar var-binds)))) var-binds) (map syntax-expand body))]
+            [let*-exp (var-binds body) (letrec ([parse-let* (lambda (var-binds) 
+                                                                (if (null? (cdr var-binds)) 
+                                                                    (app-exp (lambda-exp (list (caar var-binds)) (map syntax-expand body)) (list (syntax-expand (cadar var-binds))))
+                                                                    (app-exp (lambda-exp (list (caar var-binds)) (list (parse-let* (cdr var-binds)))) (list (syntax-expand (cadar var-binds))))))])
+                                                  (parse-let* var-binds))]  
             [set!-exp (new-val value)
                 (set!-exp new-val (syntax-expand value))]
             [else (eopl:error 'syntax-expand "not an expression ~s" exp)])))
