@@ -48,6 +48,10 @@
     [set!-exp
         (var symbol?)
         (value expression?)]
+    [begin-exp
+        (body (list-of expression?))]
+    [or-exp
+        (body (list-of expression?))]
     [cond-exp 
         (cases (list-of (lambda (x) (and ((list-of expression?) (car x)) ((list-of expression?) (cadr x))))))])
 
@@ -174,10 +178,15 @@
                     (cond [(not (equal? (length datum) 3)) (eopl:error 'parse-exp "set! expression ~s does not have (only) variable and expression" datum)]
                         [else 
                              (set!-exp (2nd datum) (parse-exp (3rd datum)))])] ; (set! var val) expression
+                [(eqv? (car datum) 'begin)
+                    (begin-exp (map parse-exp (cdr datum)))]
                 [(eqv? (car datum) 'cond)
                     (cond-exp (list (map (lambda (x) (list (parse-exp (car x)) (list (parse-exp (cdr x))))) (cdr datum))))]
+                [(eqv? (car datum) 'or) 
+                    (or-exp (map parse-exp (cdr datum)))]
                 [else (app-exp (parse-exp (1st datum)) ; (x y z ...) expression (x is a procedure, y z ... are paremeters)
 		            (map parse-exp (cdr datum)))])]
+                
         [else (eopl:error 'parse-exp "bad expression: ~s" datum)])))
 
 
@@ -204,8 +213,12 @@
             (append (list 'if (unparse-exp (2nd datum))) (list (unparse-exp (3rd datum)) (unparse-exp (cadddr datum))))]
         [(eqv? (car datum) 'set!-exp)
             (list 'set! (unparse-exp (2nd datum)))] ; (set! var val) expression
+        [(eqv? (car datum) 'begin-exp)
+            (cons 'begin (map unparse-exp (2nd datum)))]
         [((list-of list?) datum) (append (list (unparse-exp (car datum))) (unparse-exp (cdr datum)))]
         [(eqv? (car datum) 'prim-proc) (2nd datum)]
+        [(eqv? (car datum) 'or-exp)
+            (cons 'or (unparse-exp (2nd datum)))]
         [else #f])])))
 
 
@@ -303,6 +316,16 @@
                                                   (parse-let* var-binds))]  
             [set!-exp (new-val value)
                 (set!-exp new-val (syntax-expand value))]
+            [begin-exp (list-of-bodies)
+                (lambda-exp '() list-of-bodies)]
+            [or-exp (list-of-exp)
+                (if (null? list-of-exp)
+                    (lit-exp #f)
+                    (if (null? (cdr list-of-exp))
+                       (syntax-expand (car list-of-exp))
+                       (if-else-exp (syntax-expand (car list-of-exp))
+                             (syntax-expand (car list-of-exp))
+                             (syntax-expand (or-exp (cdr list-of-exp))))))]
             [else (eopl:error 'syntax-expand "not an expression ~s" exp)])))
 
 
