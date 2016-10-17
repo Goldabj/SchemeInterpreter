@@ -70,13 +70,13 @@
 
 (define-datatype proc-val proc-val?
   [prim-proc
-   (name symbol?)]
+   (name in-prim?)]
    [closure
    (vars (lambda (x) (or (null? x) (expression? x) ((list-of expression?) x))))
    (bodies (list-of expression?))
    (env environment?)])
 
-(define procedure? 
+(define in-prim? 
     (lambda (x)
         (if (member x *prim-proc-names*)
             #t
@@ -441,7 +441,7 @@
                                                     [(vector?) (vector? (1st args))]
                                                     [(list?) (list? (1st args))]
                                                     [(pair?) (pair? (1st args))]
-                                                    [(procedure?) (procedure? (1st args))]
+                                                    [(procedure?) (proc-val? (1st args))]
                                                     [(vector->list) (vector->list (1st args))]
                                                     [(number?) (number? (1st args))]
                                                     [(symbol?) (symbol? (1st args))]
@@ -475,7 +475,7 @@
                                                     [(list) (apply list args)]
                                                     [(vector) (apply vector args)]
                                                     [(apply) (apply (lambda (ls) (apply-prim-proc (unparse-exp (car args)) ls)) (cdr args))]
-                                                    [(map) (map (lambda (x) (apply-prim-proc (unparse-exp (car args)) (list (unparse-exp x)))) (cadr args))]
+                                                    [(map) (map (lambda (x) (apply-prim-proc (unparse-exp (car args)) (list x))) (cadr args))]
                                                     [else (eopl:error 'apply-prim-proc "programming error multiple")]))])))
         
 
