@@ -50,6 +50,8 @@
         (value expression?)]
     [and-exp 
         (tests (list-of expression?))]
+    [or-exp 
+        (tests (list-of expression?))]
     [cond-exp 
         (cases (list-of (lambda (all-cases) (list-of (lambda (single-case) 
                             (and ((list-of expression?) (car x)) ((list-of expression?) (cadr x))))))))])
@@ -181,6 +183,8 @@
                     (cond-exp (map (lambda (x) (list (parse-exp (car x)) (parse-exp (cadr x)))) (cdr datum)))]
                 [(eqv? (car datum) 'and)
                     (and-exp (map parse-exp (cdr datum)))]
+                [(eqv? (car datum) 'or)
+                    (or-exp (map parse-exp (cdr datum)))]
                 [else (app-exp (parse-exp (1st datum)) ; (x y z ...) expression (x is a procedure, y z ... are paremeters)
 		            (map parse-exp (cdr datum)))])]
         [else (eopl:error 'parse-exp "bad expression: ~s" datum)])))
@@ -214,6 +218,7 @@
         [(eqv? (car datum) 'cond-exp) (apply list 'cond (map (lambda (case) (cons (unparse-exp (car case)) 
                                                          (map unparse-exp (cdr case)))) (cadr datum)))]
         [(eqv? (car datum) 'and-exp) (apply list 'and (map unparse-exp (2nd datum)))]
+        [(eqv? (car datum) 'or-exp) (apply list 'or (map unparse-exp (2nd datum)))]
         [else #f])])))
 
 
@@ -319,6 +324,14 @@
                                                 (parse-and (cdr tests))
                                                 (parse-exp '#f))))])
                         (parse-and tests))]
+            [or-exp (tests)
+                (letrec ([parse-or (lambda (tests) 
+                                        (if (null? (cdr tests))
+                                            (syntax-expand (car tests))
+                                            (if-else-exp (syntax-expand (car tests))
+                                                (parse-exp '#t)
+                                                (parse-or (cdr tests)))))])
+                        (parse-or tests))]
             [cond-exp (cases)
                 (letrec ([parse-cond (lambda (cases)
                                         (if (equal? 'else (cadaar cases))
@@ -329,7 +342,7 @@
                                                 (if-else-exp (syntax-expand (caar cases))
                                                     (syntax-expand (cadar cases))
                                                     (parse-cond (cdr cases))))))])
-                    (parse-cond cases))]                                        
+                    (parse-cond cases))]                                       
             [else (eopl:error 'syntax-expand "not an expression ~s" exp)])))
 
 
