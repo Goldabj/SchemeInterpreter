@@ -180,7 +180,7 @@
                         [else 
                              (set!-exp (2nd datum) (parse-exp (3rd datum)))])] ; (set! var val) expression
                 [(eqv? (car datum) 'cond)
-                    (cond-exp (map (lambda (x) (list (parse-exp (car x)) (parse-exp (cadr x)))) (cdr datum)))]
+                    (cond-exp (map (lambda (x) (list (parse-exp (car x)) (list (map parse-exp (cdr x))))) (cdr datum)))]
                 [(eqv? (car datum) 'and)
                     (and-exp (map parse-exp (cdr datum)))]
                 [(eqv? (car datum) 'or)
@@ -215,8 +215,8 @@
             (list 'set! (unparse-exp (2nd datum)))] ; (set! var val) expression
         [((list-of list?) datum) (append (list (unparse-exp (car datum))) (unparse-exp (cdr datum)))]
         [(eqv? (car datum) 'prim-proc) (2nd datum)]
-        [(eqv? (car datum) 'cond-exp) (apply list 'cond (map (lambda (case) (cons (unparse-exp (car case)) 
-                                                         (map unparse-exp (cdr case)))) (cadr datum)))]
+        [(eqv? (car datum) 'cond-exp) (cons 'cond (map (lambda (case) (apply cons (unparse-exp (car case)) 
+                                                         (car (map unparse-exp (cdr case))))) (cadr datum)))]
         [(eqv? (car datum) 'and-exp) (apply list 'and (map unparse-exp (2nd datum)))]
         [(eqv? (car datum) 'or-exp) (apply list 'or (map unparse-exp (2nd datum)))]
         [else #f])])))
@@ -335,12 +335,12 @@
             [cond-exp (cases)
                 (letrec ([parse-cond (lambda (cases)
                                         (if (equal? 'else (cadaar cases))
-                                            (syntax-expand (cadar cases))
+                                            (syntax-expand (begin-exp (caadar cases)))
                                             (if (null? (cdr cases))
                                                 (if-exp (syntax-expand (caar cases))
-                                                        (syntax-expand (cadar cases)))
+                                                        (begin-exp (syntax-expand (caadar cases))))
                                                 (if-else-exp (syntax-expand (caar cases))
-                                                    (syntax-expand (cadar cases))
+                                                    (syntax-expand (begin-exp (caadar cases)))
                                                     (parse-cond (cdr cases))))))])
                     (parse-cond cases))]                                       
             [else (eopl:error 'syntax-expand "not an expression ~s" exp)])))
