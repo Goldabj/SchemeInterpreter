@@ -2,8 +2,8 @@
 ;; Easier to submit to server, probably harder to use in the development process
 ;; Brendan Goldacker and Cameron Metzger
 
-;;(load "C:/Users/goldacbj/Google Drive/Documents/CSSE/CSSE304/chez-init.ss") 
-(load "C:/Users/metzgecj/Desktop/Year3/PLC/chez-init.ss") 
+(load "C:/Users/goldacbj/Google Drive/Documents/CSSE/CSSE304/chez-init.ss") 
+;;(load "C:/Users/metzgecj/Desktop/Year3/PLC/chez-init.ss") 
 
 ;-------------------+
 ;                   |
@@ -21,6 +21,7 @@
 
 ; datatypes: lambda-exp, variable, lit-exp, if-exp, if-else-exp, let-exp, letrec-exp, let*-exp, set!-exp
 (define-datatype expression expression?
+    [void (empty null?)]
     [var-exp (id symbol?)]
     [variable (var symbol?)]
     [lambda-exp
@@ -331,6 +332,9 @@
         (if (eval-exp test-exp env)    ;;need to add enviornments
             (eval-exp then-exp env)    
             (eval-exp else-exp env))]
+    [if-exp (test-exp then-exp)
+        (if (eval-exp test-exp env)
+            (eval-exp then-exp env))]
     [lambda-exp (vars bodies)
         (closure vars bodies env)]
     [let-exp (var-binds bodies)
