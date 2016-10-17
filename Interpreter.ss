@@ -21,9 +21,7 @@
 
 ; datatypes: lambda-exp, variable, lit-exp, if-exp, if-else-exp, let-exp, letrec-exp, let*-exp, set!-exp
 (define-datatype expression expression?
-    [void (empty null?)]
     [var-exp (id symbol?)]
-    [variable (var symbol?)]
     [lambda-exp
         (vars (lambda (x) (or  (and (pair? x) (not (list? x))) (null? x) (symbol? x) ((list-of symbol?) x))))
         (body (list-of expression?))]
@@ -39,13 +37,13 @@
         (if-body expression?)
         (else-body expression?)]
     [let-exp
-        (var-binds (list-of (lambda (x) (and (pair? x) (expression? (car x)) (expression? (cadr x))))))
+        (var-binds (list-of (lambda (x) (and (pair? x) (symbol? (car x)) (expression? (cadr x))))))
         (body (list-of expression?))]
     [let*-exp
-        (var-binds (list-of (lambda (x) (and (pair? x) (expression? (car x)) (expression? (cadr x))))))
+        (var-binds (list-of (lambda (x) (and (pair? x) (symbol? (car x)) (expression? (cadr x))))))
         (body (list-of expression?))]
     [letrec-exp 
-        (var-binds (list-of (lambda (x) (and (pair? x) (expression? (car x)) (expression? (cadr x))))))
+        (var-binds (list-of (lambda (x) (and (pair? x) (symbol? (car x)) (expression? (cadr x))))))
         (body (list-of expression?))]
     [set!-exp
         (var symbol?)
@@ -136,7 +134,7 @@
                         [(not (for-all (lambda (pair) (symbol? (car pair))) (2nd datum)))
                             (eopl:error 'parse-exp "vars in ~s-exp must be symbols ~s" (car datum) datum)]
                         [else 
-                            (let-exp (map (lambda (pair) (list (variable (car pair)) (parse-exp (cadr pair)))) (2nd datum)) ; (let ((x val) ...) body ...) expression (adds extra paren around body)
+                            (let-exp (map (lambda (pair) (list (car pair) (parse-exp (cadr pair)))) (2nd datum)) ; (let ((x val) ...) body ...) expression (adds extra paren around body)
                               (map parse-exp (cddr datum)))])]
                 [(eqv? (car datum) 'let*)
                     (cond [(< (length datum) 3) (eopl:error 'parse-exp "~s-expression has incorrect length ~s" (car datum) datum)]
@@ -148,7 +146,7 @@
                         [(not (for-all (lambda (pair) (symbol? (car pair))) (2nd datum)))
                             (eopl:error 'parse-exp "vars in ~s-exp must be symbols ~s" (car datum) datum)]
                         [else 
-                             (let*-exp (map (lambda (pair) (list (variable (car pair)) (parse-exp (cadr pair)))) (2nd datum)) ; (let ((x val) ...) body ...) expression (adds extra paren around body)
+                             (let*-exp (map (lambda (pair) (list (car pair) (parse-exp (cadr pair)))) (2nd datum)) ; (let ((x val) ...) body ...) expression (adds extra paren around body)
                                 (map parse-exp (cddr datum)))])]
                 [(eqv? (car datum) 'letrec)
                     (cond [(< (length datum) 3) (eopl:error 'parse-exp "~s-expression has incorrect length ~s" (car datum) datum)]
@@ -160,7 +158,7 @@
                         [(not (for-all (lambda (pair) (symbol? (car pair))) (2nd datum)))
                             (eopl:error 'parse-exp "vars in ~s-exp must be symbols ~s" (car datum) datum)]
                         [else 
-                            (letrec-exp (map (lambda (pair) (list (variable (car pair)) (parse-exp (cadr pair)))) (2nd datum)) ; (let ((x val) ...) body ...) expression (adds extra paren around body)
+                            (letrec-exp (map (lambda (pair) (list (car pair) (parse-exp (cadr pair)))) (2nd datum)) ; (let ((x val) ...) body ...) expression (adds extra paren around body)
                                 (map parse-exp (cddr datum)))])]
                 [(eqv? (car datum) 'if)
                     (cond [(< (length datum) 3) 
@@ -173,7 +171,7 @@
                 [(eqv? (car datum) 'set!)
                     (cond [(not (equal? (length datum) 3)) (eopl:error 'parse-exp "set! expression ~s does not have (only) variable and expression" datum)]
                         [else 
-                             (set!-exp (variable (2nd datum)) (parse-exp (3rd datum)))])] ; (set! var val) expression
+                             (set!-exp (2nd datum) (parse-exp (3rd datum)))])] ; (set! var val) expression
                 [else (app-exp (parse-exp (1st datum)) ; (x y z ...) expression (x is a procedure, y z ... are paremeters)
 		            (map parse-exp (cdr datum)))])]
         [else (eopl:error 'parse-exp "bad expression: ~s" datum)])))
@@ -191,7 +189,6 @@
         [(eqv? (car datum) 'lambda-exp)
                 (append (list 'lambda (2nd datum)) (unparse-exp (3rd datum)))]
         [(eqv? (car datum) 'app-exp) (append (list (unparse-exp (2nd datum))) (unparse-exp (3rd datum)))]
-        [(eqv? (car datum) 'variable) (2nd datum)]
         [(eqv? (car datum) 'lit-exp) (2nd datum)]
         [(eqv? (car datum) 'let-exp)
             (append (list 'let (unparse-exp (2nd datum))) (unparse-exp (3rd datum)))]
@@ -276,11 +273,38 @@
 
 ; To be added later
 
+(define syntax-expand 
+    (lambda (exp)
+        (cases expression exp
+            [lit-exp (datum) (lit-exp datum)]
+            [let-exp (var-binds bodies) 
+                (app-exp (lambda-exp (get-var-binds var-binds) (map syntax-expand bodies)) (map syntax-expand (get-binds var-binds)))]
+            [var-exp (var) (var-exp var)]
+            [lambda-exp (vars bodies) 
+                 (lambda-exp vars (map syntax-expand bodies))]
+            [app-exp (rator rands) (app-exp (syntax-expand rator)
+                                            (map syntax-expand rands))]
+            [if-else-exp (test then-exp else-exp)
+                    (if-else-exp (syntax-expand test)
+                                  (syntax-expand then-exp)
+                                  (syntax-expand else-exp))]
+            [if-exp (test then-exp)
+                    (if-exp (syntax-expand test)
+                                  (syntax-expand then-exp))]
+            [letrec-exp (var-binds body) (app-exp (lambda-exp (get-var-binds var-binds) (map syntax-expand bodies)) (map syntax-expand (get-binds var-binds)))]
+            [let*-exp (var-binds body) (app-exp (lambda-exp (get-var-binds var-binds) (map syntax-expand bodies)) (map syntax-expand (get-binds var-binds)))]
+            [set!-exp (new-val value)
+                (set!-exp new-val (syntax-expand value))]
+            [else (eopl:error 'syntax-expand "not an expression ~s" exp)])))
 
 
+(define get-var-binds
+    (lambda (let-bindings)
+            (map car let-bindings)))
 
-
-
+(define get-binds 
+    (lambda (let-bindings)
+            (map cadr let-bindings)))
 
 
 
@@ -313,7 +337,6 @@
 (define eval-exp
   (lambda (exp env)
     (cases expression exp
-      [variable (datum) datum]
       [lit-exp (datum)
                 (if (and (list? datum) (eqv? (car datum) 'quote))
                     (cadr datum)
@@ -492,13 +515,13 @@
   (lambda ()
     (display "--> ")
     ;; notice that we don't save changes to the environment...
-    (let ([answer (un-closure (top-level-eval (parse-exp (read))))])
+    (let ([answer (un-closure (top-level-eval (syntax-expand (parse-exp (read)))))])
       ;; TODO: are there answers that should display differently
         (eopl:pretty-print answer) (newline)
       (rep))))  ; tail-recursive, so stack doesn't grow.
 
 (define eval-one-exp
-  (lambda (x) (top-level-eval (parse-exp x))))
+  (lambda (x) (top-level-eval (syntax-expand (parse-exp x)))))
 
 
 
