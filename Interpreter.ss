@@ -512,7 +512,7 @@
 (define *prim-proc-one '(add1 sub1 zero? not car cdr caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr null? 
                                 atom? length list->vector vector? list? pair? procedure? vector->list number? symbol?))
 
-(define *prim-proc-two '(= < > <= >= cons eq? equal? make-vector vector-ref set-car! set-cdr! assq member))
+(define *prim-proc-two '(= < > <= >= cons eq? equal? make-vector vector-ref set-car! set-cdr! assq member quotient))
 
 (define *prim-proc-three '(vector-set!))
 
@@ -584,6 +584,7 @@
                                                     [(set-car!) (set-car! (1st args) (2nd args))]
                                                     [(set-cdr!) (set-cdr! (1st args) (2nd args))]
                                                     [(member) (member (1st args) (2nd args))]
+                                                    [(quotient) (quotient (1st args) (2nd args))]
                                                     [else (eopl:error 'apply-prim-proc "programming error two")]))]
         [(member prim-proc *prim-proc-three) (if (not (equal? 3 (length args)))
                                                 (eopl:error 'apply-prim-proc "incorrect amount of arguments to ~s" prim-proc)
