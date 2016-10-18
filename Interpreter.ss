@@ -2,8 +2,8 @@
 ;; Easier to submit to server, probably harder to use in the development process
 ;; Brendan Goldacker and Cameron Metzger
 
-(load "C:/Users/goldacbj/Google Drive/Documents/CSSE/CSSE304/chez-init.ss") 
-;;(load "C:/Users/metzgecj/Desktop/Year3/PLC/chez-init.ss") 
+;;(load "C:/Users/goldacbj/Google Drive/Documents/CSSE/CSSE304/chez-init.ss") 
+(load "C:/Users/metzgecj/Desktop/Year3/PLC/chez-init.ss") 
 
 ;-------------------+
 ;                   |
@@ -24,7 +24,7 @@
     [var-exp (id symbol?)]
     [lambda-exp
         (vars (lambda (x) (or  (and (pair? x) (not (list? x))) (null? x) (symbol? x) ((list-of symbol?) x))))
-        (body (list-of expression?))]
+        (body (lambda (x) (or ((list-of expression?) x) (symbol? x))))]
     [app-exp
         (rator expression?)
         (rand (list-of expression?))]
@@ -54,6 +54,12 @@
         (tests (list-of expression?))]
      [begin-exp
          (body (list-of expression?))]
+    [case-exp
+        (key expression?)
+        (body list?)]
+    [while-exp
+        (test expression?)
+        (body (list-of expression?))]
     [cond-exp 
         (cases (list-of (lambda (all-cases) (list-of (lambda (single-case) 
                             (and ((list-of expression?) (car x)) ((list-of expression?) (cadr x))))))))])
@@ -189,6 +195,10 @@
                     (or-exp (map parse-exp (cdr datum)))]
                 [(eqv? (car datum) 'begin)
                     (begin-exp (map parse-exp (cdr datum)))]
+                [(eqv? (car datum) 'case)
+                    (case-exp (parse-exp (2nd datum)) (cddr datum))]
+                [(eqv? (car datum) 'while)
+                    (while-exp (parse-exp (2nd datum)) (map parse-exp (cddr datum)))]
                 [else (app-exp (parse-exp (1st datum)) ; (x y z ...) expression (x is a procedure, y z ... are paremeters)
 		            (map parse-exp (cdr datum)))])]
         [else (eopl:error 'parse-exp "bad expression: ~s" datum)])))
@@ -225,6 +235,8 @@
                                                          (car (map unparse-exp (cdr case))))) (cadr datum)))]
         [(eqv? (car datum) 'and-exp) (apply list 'and (map unparse-exp (2nd datum)))]
         [(eqv? (car datum) 'or-exp) (apply list 'or (map unparse-exp (2nd datum)))]
+        [(eqv? (car datum) 'case-exp) (list 'case (unparse-exp (2nd datum)) (3rd datum))]
+        [(eqv? (car datum) 'while-exp) (apply list 'while (unparse-exp (2nd datum)) (unparse-exp (3rd datum)))]
         [else #f])])))
 
 
@@ -330,27 +342,49 @@
                                                 (parse-and (cdr tests))
                                                 (parse-exp '#f))))])
                         (parse-and tests))]
-            [or-exp (tests)
-                (letrec ([parse-or (lambda (tests) 
-                                        (if (null? (cdr tests))
-                                            (syntax-expand (car tests))
-                                            (if-else-exp (syntax-expand (car tests))
-                                                (parse-exp '#t)
-                                                (parse-or (cdr tests)))))])
-                        (parse-or tests))]
+            [or-exp (tests) 
+                (if (null? tests)
+                    (lit-exp #f)
+                    (if (null? (cdr tests))
+                        (syntax-expand (car tests))
+                        (if-else-exp (syntax-expand (car tests))
+                                     (syntax-expand (car tests))
+                                     (syntax-expand (list 'or-exp (cdr tests))))))]
+
             [begin-exp (list-of-bodies)
-                  (lambda-exp '() list-of-bodies)]
+                  (syntax-expand (app-exp (lambda-exp '() list-of-bodies) '()))]
             [cond-exp (cases)
                 (letrec ([parse-cond (lambda (cases)
                                         (if (equal? 'else (cadaar cases))
                                             (syntax-expand (begin-exp (caadar cases)))
                                             (if (null? (cdr cases))
                                                 (if-exp (syntax-expand (caar cases))
-                                                        (begin-exp (syntax-expand (caadar cases))))
+                                                        (syntax-expand (begin-exp (caadar cases))))
                                                 (if-else-exp (syntax-expand (caar cases))
                                                     (syntax-expand (begin-exp (caadar cases)))
                                                     (parse-cond (cdr cases))))))])
-                    (parse-cond cases))]                                       
+                    (parse-cond cases))]     
+            [case-exp (key body)
+                (letrec ([expand-case (lambda (body)
+                                        (cond 
+                                            [(null? body) (void)]
+                                            [(null? (cdr body)) (if (eq? 'else (caar body))
+                                                                    (car (cadar body))
+                                                                    (if (member key (caar body))
+                                                                        (cadar body)
+                                                                        (void)))]
+                                            [(member key (caar body)) (cadar body)]
+                                            [else (expand-case (cdr body))]))])
+                    (expand-case body))]    
+            [while-exp (test body)
+                (letrec ([expand-while (lambda ()
+                                         (if (syntax-expand test)
+                                             (begin 
+                                                (map syntax-expand body)
+                                                (expand-while))
+                                             (void)))])
+                    (expand-while))]
+
             [else (eopl:error 'syntax-expand "not an expression ~s" exp)])))
 
 
