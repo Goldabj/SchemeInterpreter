@@ -376,13 +376,7 @@
                                                         (expand-case (cdr body))))))])
                         (expand-case body))]
             [while-exp (test body)
-                (letrec ([expand-while (lambda ()
-                                         (if (syntax-expand test)
-                                             (begin 
-                                                (map syntax-expand body)
-                                                (expand-while))
-                                             (void)))])
-                    (expand-while))]
+                (while-exp (syntax-expand test) (map syntax-expand body))]
 
             [else (eopl:error 'syntax-expand "not an expression ~s" exp)])))
 
@@ -452,6 +446,13 @@
     [let-exp (var-binds bodies)
         (let ([new-env (extend-env (get-vars var-binds) (eval-rands (get-exps var-binds) env) env)])
             (eval-bodies bodies new-env))]
+    [while-exp (test bodies)
+        (let ([while-helper (lambda ()
+                                (if (eval-exp test env)
+                                    (begin 
+                                        (eval-bodies bodies env)
+                                        (eval-exp exp env))))])
+            (while-helper))]
       [else (eopl:error 'eval-exp "Bad abstract syntax: ~a" exp)])))
 
 ; evaluate the list of operands, putting results into a list
@@ -504,7 +505,7 @@
 (define *prim-proc-names* '(+ - * / add1 sub1 zero? not = < > <= >= cons list null? assq eq? 
                             equal? atom? length list->vector list? pair? procedure? vector->list vector 
                             make-vector vector-ref vector? number? symbol? set-car! set-cdr! vector-set! member
-                            display newline car cdr caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr apply map))
+                            display newline car cdr caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr apply map quotient))
 
 (define *prim-proc-zero '(newline))
 
