@@ -2,8 +2,8 @@
 ;; Easier to submit to server, probably harder to use in the development process
 ;; Brendan Goldacker and Cameron Metzger
 
-;;(load "C:/Users/goldacbj/Google Drive/Documents/CSSE/CSSE304/chez-init.ss") 
-(load "C:/Users/metzgecj/Desktop/Year3/PLC/chez-init.ss") 
+(load "C:/Users/goldacbj/Google Drive/Documents/CSSE/CSSE304/chez-init.ss") 
+;;(load "C:/Users/metzgecj/Desktop/Year3/PLC/chez-init.ss") 
 
 ;-------------------+
 ;                   |
@@ -196,7 +196,7 @@
                 [(eqv? (car datum) 'begin)
                     (begin-exp (map parse-exp (cdr datum)))]
                 [(eqv? (car datum) 'case)
-                    (case-exp (parse-exp (2nd datum)) (cddr datum))]
+                    (case-exp (parse-exp (2nd datum)) (map (lambda (x) (list (car x) (parse-exp (cadr x)))) (cddr datum)))]
                 [(eqv? (car datum) 'while)
                     (while-exp (parse-exp (2nd datum)) (map parse-exp (cddr datum)))]
                 [else (app-exp (parse-exp (1st datum)) ; (x y z ...) expression (x is a procedure, y z ... are paremeters)
@@ -366,16 +366,15 @@
                     (parse-cond cases))]     
             [case-exp (key body)
                 (letrec ([expand-case (lambda (body)
-                                        (cond 
-                                            [(null? body) (void)]
-                                            [(null? (cdr body)) (if (eq? 'else (caar body))
-                                                                    (car (cadar body))
-                                                                    (if (member key (caar body))
-                                                                        (cadar body)
-                                                                        (void)))]
-                                            [(member key (caar body)) (cadar body)]
-                                            [else (expand-case (cdr body))]))])
-                    (expand-case body))]    
+                                            (if (equal? 'else (caar body))
+                                                (syntax-expand (cadar body))
+                                                (if (null? (cdr body))
+                                                    (if-exp (app-exp (var-exp 'member) (list key (list 'lit-exp (caar body))))
+                                                        (syntax-expand (cadar body)))
+                                                    (if-else-exp (app-exp (var-exp 'member) (list key (list 'lit-exp (caar body))))
+                                                        (syntax-expand (cadar body))
+                                                        (expand-case (cdr body))))))])
+                        (expand-case body))]
             [while-exp (test body)
                 (letrec ([expand-while (lambda ()
                                          (if (syntax-expand test)
@@ -504,7 +503,7 @@
 
 (define *prim-proc-names* '(+ - * / add1 sub1 zero? not = < > <= >= cons list null? assq eq? 
                             equal? atom? length list->vector list? pair? procedure? vector->list vector 
-                            make-vector vector-ref vector? number? symbol? set-car! set-cdr! vector-set! 
+                            make-vector vector-ref vector? number? symbol? set-car! set-cdr! vector-set! member
                             display newline car cdr caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr apply map))
 
 (define *prim-proc-zero '(newline))
@@ -512,7 +511,7 @@
 (define *prim-proc-one '(add1 sub1 zero? not car cdr caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr null? 
                                 atom? length list->vector vector? list? pair? procedure? vector->list number? symbol?))
 
-(define *prim-proc-two '(= < > <= >= cons eq? equal? make-vector vector-ref set-car! set-cdr! assq))
+(define *prim-proc-two '(= < > <= >= cons eq? equal? make-vector vector-ref set-car! set-cdr! assq member))
 
 (define *prim-proc-three '(vector-set!))
 
@@ -583,6 +582,7 @@
                                                     [(vector-ref) (vector-ref (1st args) (2nd args))]
                                                     [(set-car!) (set-car! (1st args) (2nd args))]
                                                     [(set-cdr!) (set-cdr! (1st args) (2nd args))]
+                                                    [(member) (member (1st args) (2nd args))]
                                                     [else (eopl:error 'apply-prim-proc "programming error two")]))]
         [(member prim-proc *prim-proc-three) (if (not (equal? 3 (length args)))
                                                 (eopl:error 'apply-prim-proc "incorrect amount of arguments to ~s" prim-proc)
