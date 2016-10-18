@@ -369,21 +369,15 @@
                                         (cond 
                                             [(null? body) (void)]
                                             [(null? (cdr body)) (if (eq? 'else (caar body))
-                                                                    (car (cadar body))
+                                                                    (cadar body)
                                                                     (if (member key (caar body))
                                                                         (cadar body)
                                                                         (void)))]
                                             [(member key (caar body)) (cadar body)]
                                             [else (expand-case (cdr body))]))])
-                    (expand-case body))]    
+                    (expand-case body))] 
             [while-exp (test body)
-                (letrec ([expand-while (lambda ()
-                                         (if (syntax-expand test)
-                                             (begin 
-                                                (map syntax-expand body)
-                                                (expand-while))
-                                             (void)))])
-                    (expand-while))]
+                (while-exp (syntax-expand test) (map syntax-expand body))]
 
             [else (eopl:error 'syntax-expand "not an expression ~s" exp)])))
 
@@ -453,6 +447,13 @@
     [let-exp (var-binds bodies)
         (let ([new-env (extend-env (get-vars var-binds) (eval-rands (get-exps var-binds) env) env)])
             (eval-bodies bodies new-env))]
+    [while-exp (test bodies)
+        (let ([while-helper (lambda ()
+                                (if (eval-exp test env)
+                                    (begin 
+                                        (eval-bodies bodies env)
+                                        (eval-exp exp env))))])
+            (while-helper))]
       [else (eopl:error 'eval-exp "Bad abstract syntax: ~a" exp)])))
 
 ; evaluate the list of operands, putting results into a list
@@ -505,14 +506,14 @@
 (define *prim-proc-names* '(+ - * / add1 sub1 zero? not = < > <= >= cons list null? assq eq? 
                             equal? atom? length list->vector list? pair? procedure? vector->list vector 
                             make-vector vector-ref vector? number? symbol? set-car! set-cdr! vector-set! 
-                            display newline car cdr caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr apply map))
+                            display newline car cdr caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr apply map quotient))
 
 (define *prim-proc-zero '(newline))
 
 (define *prim-proc-one '(add1 sub1 zero? not car cdr caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr null? 
                                 atom? length list->vector vector? list? pair? procedure? vector->list number? symbol?))
 
-(define *prim-proc-two '(= < > <= >= cons eq? equal? make-vector vector-ref set-car! set-cdr! assq))
+(define *prim-proc-two '(= < > <= >= cons eq? equal? make-vector vector-ref set-car! set-cdr! assq quotient))
 
 (define *prim-proc-three '(vector-set!))
 
@@ -583,6 +584,7 @@
                                                     [(vector-ref) (vector-ref (1st args) (2nd args))]
                                                     [(set-car!) (set-car! (1st args) (2nd args))]
                                                     [(set-cdr!) (set-cdr! (1st args) (2nd args))]
+                                                    [(quotient) (quotient (1st args) (2nd args))]
                                                     [else (eopl:error 'apply-prim-proc "programming error two")]))]
         [(member prim-proc *prim-proc-three) (if (not (equal? 3 (length args)))
                                                 (eopl:error 'apply-prim-proc "incorrect amount of arguments to ~s" prim-proc)
