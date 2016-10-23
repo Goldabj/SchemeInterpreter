@@ -264,7 +264,7 @@
 
 (define extend-env
   (lambda (syms vals env)
-    (extended-env-record syms vals env)))
+    (extended-env-record syms (map ref vals) env)))
 
 (define list-find-position
   (lambda (sym los)
@@ -280,17 +280,20 @@
 		 (+ 1 list-index-r)
 		 #f))))))
 
-(define apply-env
-  (lambda (env sym succeed fail) ; succeed and fail are procedures applied if the var is or isn't found, respectively.
-    (cases environment env
+(define apply-env-ref
+    (lambda (env sym succeed fail)
+         (cases environment env
       (empty-env-record ()
         (fail))
       (extended-env-record (syms vals env)
 	(let ((pos (list-find-position sym syms)))
       	  (if (number? pos)
 	      (succeed (list-ref vals pos))
-	      (apply-env env sym succeed fail)))))))
+	      (apply-env-ref env sym succeed fail)))))))
 
+(define apply-env
+  (lambda (env sym succeed fail) ; succeed and fail are procedures applied if the var is or isn't found, respectively.
+    (deref (apply-env-ref env sym succeed fail))))
 
 
 
@@ -415,6 +418,14 @@
     (lambda (ls)
         (map cadr ls)))
 
+
+; functions for references
+
+(define set-ref! set-box!)
+(define deref unbox)
+(define ref? box?)
+(define ref box)
+
 ; eval-exp is the main component of the interpreter
 
 (define eval-exp
@@ -453,7 +464,12 @@
                                         (eval-bodies bodies env)
                                         (eval-exp exp env))))])
             (while-helper))]
-      [else (eopl:error 'eval-exp "Bad abstract syntax: ~a" exp)])))
+    [set!-exp (var val-exp) 
+        (set-ref! (apply-env-ref env var (lambda (x) x) ; procedure to call if id is in the environment 
+           (lambda () (eopl:error 'apply-env ; procedure to call if id not in env
+		          "variable not found in environment: ~s"
+			   id))) (eval-exp val-exp env))]
+    [else (eopl:error 'eval-exp "Bad abstract syntax: ~a" exp)])))
 
 ; evaluate the list of operands, putting results into a list
 
