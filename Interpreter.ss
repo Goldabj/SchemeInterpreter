@@ -537,9 +537,9 @@
             [(symbol? vars) (list (list vars) (list args))]
             [(symbol? (car vars)) (if (and (null? (cdr vars)) (not (null? (cdr args))))
                                     (eopl:error 'flatten-vars-args "incorrect amount of arguments to procedure ~s" args)
-                                    (if (not (pair? (cdr vars)))
+                                    (if (symbol? (cdr vars))
                                         (if (null? (cdr args))
-                                            (list (list (car vars)) args)
+                                            (list (list (car vars) (cdr vars)) (list (car args) '()))
                                             (list (list (car vars) (cdr vars)) (cons (car args) (list (cdr args)))))
                                         (let ([final-vars-args (flatten-vars-args (cdr vars) (cdr args))])
                                           (list (cons (car vars) (car final-vars-args)) (cons (car args) (cadr final-vars-args))))))])))
@@ -640,9 +640,7 @@
         [(member prim-proc *prim-proc-three) (if (not (equal? 3 (length args)))
                                                 (eopl:error 'apply-prim-proc "incorrect amount of arguments to ~s" prim-proc)
                                                 (vector-set! (1st args) (2nd args) (3rd args)))]
-        [(member prim-proc *prim-proc-multiple) (if (null? args)
-                                                (eopl:error 'apply-prim-proc "incorrect amount of arguments to ~s" prim-proc)
-                                                (case prim-proc
+        [(member prim-proc *prim-proc-multiple) (case prim-proc
                                                     [(+) (apply + args)]
                                                     [(-) (apply - args)]
                                                     [(*) (apply * args)]
@@ -654,7 +652,7 @@
                                                     [(map) (if (equal? 'closure (caar args))
                                                             (map (lambda (x) (apply-proc (car args) (list x))) (cadr args))
                                                             (map (lambda (x) (apply-prim-proc (unparse-exp (car args)) (list x))) (cadr args)))]
-                                                    [else (eopl:error 'apply-prim-proc "programming error multiple")]))])))
+                                                    [else (eopl:error 'apply-prim-proc "programming error multiple")])])))
         
 
 (define rep      ; "read-eval-print" loop.
