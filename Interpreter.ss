@@ -2,8 +2,8 @@
 ;; Easier to submit to server, probably harder to use in the development process
 ;; Brendan Goldacker and Cameron Metzger
 
-;;(load "C:/Users/goldacbj/Google Drive/Documents/CSSE/CSSE304/chez-init.ss") 
-(load "C:/Users/metzgecj/Desktop/Year3/PLC/chez-init.ss") 
+(load "C:/Users/goldacbj/Google Drive/Documents/CSSE/CSSE304/chez-init.ss") 
+;(load "C:/Users/metzgecj/Desktop/Year3/PLC/chez-init.ss") 
 
 ;-------------------+
 ;                   |
@@ -347,7 +347,7 @@
             [if-exp (test then-exp)
                     (if-exp (syntax-expand test)
                                   (syntax-expand then-exp))]
-            [letrec-exp (var-binds bodies) (syntax-expand (list 'let-exp (map list-with-false var-binds) (append (map add-set!-exp var-binds) bodies)))]
+            [letrec-exp (var-binds bodies) (syntax-expand (list 'let-exp (map list-with-false var-binds) (append (map add-set!-exp var-binds)  bodies)))]
            ;; [letrec-exp (var-binds bodies) (app-exp (lambda-exp (get-var-binds var-binds) (map syntax-expand bodies)) (append (map add-set!-exp var-binds)  (map syntax-expand (get-binds var-binds))))]
 
             [let*-exp (var-binds body) (letrec ([parse-let* (lambda (var-binds) 
@@ -648,7 +648,9 @@
                                                     [(list) (apply list args)]
                                                     [(vector) (apply vector args)]
                                                     [(apply) (apply (lambda (ls) (apply-prim-proc (unparse-exp (car args)) ls)) (cdr args))]
-                                                    [(map) (map (lambda (x) (apply-prim-proc (unparse-exp (car args)) (list x))) (cadr args))]
+                                                    [(map) (if (equal? 'closure (caar args))
+                                                            (map (lambda (x) (apply-proc (car args) (list x))) (cadr args))
+                                                            (map (lambda (x) (apply-prim-proc (unparse-exp (car args)) (list x))) (cadr args)))]
                                                     [else (eopl:error 'apply-prim-proc "programming error multiple")]))])))
         
 
