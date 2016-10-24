@@ -551,7 +551,7 @@
             (begin (eval-exp (car bodies) env)
                 (eval-bodies (cdr bodies) env)))))
 
-(define *prim-proc-names* '(+ - * / add1 sub1 zero? not = < > <= >= cons list null? assq eq? 
+(define *prim-proc-names* '(+ - * / add1 sub1 zero? not = < > <= >= cons list null? assq eq? eqv? append list-tail
                             equal? atom? length list->vector list? pair? procedure? vector->list vector 
                             make-vector vector-ref vector? number? symbol? set-car! set-cdr! vector-set! member
                             display newline car cdr caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr apply map quotient))
@@ -561,11 +561,11 @@
 (define *prim-proc-one '(add1 sub1 zero? not car cdr caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr null? 
                                 atom? length list->vector vector? list? pair? procedure? vector->list number? symbol?))
 
-(define *prim-proc-two '(= < > <= >= cons eq? equal? make-vector vector-ref set-car! set-cdr! assq member quotient))
+(define *prim-proc-two '(= < > <= >= cons eq? equal? eqv? make-vector vector-ref set-car! set-cdr! assq member quotient list-tail))
 
 (define *prim-proc-three '(vector-set!))
 
-(define *prim-proc-multiple '(+ - * / list vector apply map))
+(define *prim-proc-multiple '(+ - * / list vector apply map append))
 
 (define init-env         ; for now, our initial global environment only contains 
   (extend-env            ; procedure names.  Recall that an environment associates
@@ -628,11 +628,13 @@
                                                     [(cons) (cons (1st args) (2nd args))]
                                                     [(eq?) (eq? (1st args) (2nd args))]
                                                     [(equal?) (equal? (1st args) (2nd args))]
+                                                    [(eqv?) (eqv? (1st args) (2nd args))]
                                                     [(make-vector) (make-vector (1st args) (2nd args))]
                                                     [(vector-ref) (vector-ref (1st args) (2nd args))]
                                                     [(set-car!) (set-car! (1st args) (2nd args))]
                                                     [(set-cdr!) (set-cdr! (1st args) (2nd args))]
                                                     [(member) (member (1st args) (2nd args))]
+                                                    [(list-tail) (list-tail (1st args) (2nd args))]
                                                     [(quotient) (quotient (1st args) (2nd args))]
                                                     [else (eopl:error 'apply-prim-proc "programming error two")]))]
         [(member prim-proc *prim-proc-three) (if (not (equal? 3 (length args)))
@@ -647,6 +649,7 @@
                                                     [(/) (apply / args)]
                                                     [(list) (apply list args)]
                                                     [(vector) (apply vector args)]
+                                                    [(append) (apply append args)]
                                                     [(apply) (apply (lambda (ls) (apply-prim-proc (unparse-exp (car args)) ls)) (cdr args))]
                                                     [(map) (if (equal? 'closure (caar args))
                                                             (map (lambda (x) (apply-proc (car args) (list x))) (cadr args))
