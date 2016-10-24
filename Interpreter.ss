@@ -60,6 +60,10 @@
     [while-exp
         (test expression?)
         (body (list-of expression?))]
+    [named-let-exp  
+        (name symbol?)
+        (var-binds (list-of (lambda (x) (and (pair? x) (symbol? (car x)) (expression? (cadr x))))))
+        (body (list-of expression?))]
     [cond-exp 
         (cases (list-of (lambda (all-cases) (list-of (lambda (single-case) 
                             (and ((list-of expression?) (car x)) ((list-of expression?) (cadr x))))))))])
@@ -139,7 +143,7 @@
                                  (map parse-exp (cddr datum)))
                              (lambda-exp (2nd datum) ; (lambda x body ...) expression (adds paren around body)
                                 (map parse-exp (cddr datum))))])]
-                [(eqv? (car datum) 'let)
+                [(and (eqv? (car datum) 'let) (not (symbol? (2nd datum))))
                     (cond [(< (length datum) 3) (eopl:error 'parse-exp "~s-expression has incorrect length ~s" (car datum) datum)]
                         [(and (pair? (2nd datum)) (not (list? (2nd datum)))) (eopl:error 'parse-exp "declarations in ~s-expression not a list ~s" (car datum) datum)]
                         [(or (not (list? (2nd datum))) (not (for-all (lambda (pair) (or (null? pair) (list? pair))) (2nd datum)))) 
@@ -151,6 +155,18 @@
                         [else 
                             (let-exp (map (lambda (pair) (list (car pair) (parse-exp (cadr pair)))) (2nd datum)) ; (let ((x val) ...) body ...) expression (adds extra paren around body)
                               (map parse-exp (cddr datum)))])]
+                [(and (eqv? (car datum) 'let) (symbol? (2nd datum)))
+                    (cond [(< (length datum) 4) (eopl:error 'parse-exp "~s-expression has incorrect length ~s" (car datum) datum)]
+                        [(and (pair? (3rd datum)) (not (list? (3rd datum)))) (eopl:error 'parse-exp "declarations in ~s-expression not a list ~s" (car datum) datum)]
+                        [(or (not (list? (3rd datum))) (not (for-all (lambda (pair) (or (null? pair) (list? pair))) (3rd datum)))) 
+                            (eopl:error 'parse-exp "declaration in ~s-exp is not a proper list ~s" (car datum) datum)]
+                        [(not (for-all (lambda (pair) (equal? 2 (length pair))) (3rd datum))) 
+                            (eopl:error 'parse-exp "declaration in ~s-exp must be a list of length 2 ~s" (car datum) datum)]
+                        [(not (for-all (lambda (pair) (symbol? (car pair))) (3rd datum)))
+                            (eopl:error 'parse-exp "vars in ~s-exp must be symbols ~s" (car datum) datum)]
+                        [else 
+                            (named-let-exp (2nd datum) (map (lambda (pair) (list (car pair) (parse-exp (cadr pair)))) (3rd datum)) ;(let name ((x val) ...) body ...) 
+                                (map parse-exp (cdddr datum)))])]
                 [(eqv? (car datum) 'let*)
                     (cond [(< (length datum) 3) (eopl:error 'parse-exp "~s-expression has incorrect length ~s" (car datum) datum)]
                         [(and (pair? (2nd datum)) (not (list? (2nd datum)))) (eopl:error 'parse-exp "declarations in ~s-expression not a list ~s" (car datum) datum)]
@@ -219,6 +235,8 @@
         [(eqv? (car datum) 'lit-exp) (2nd datum)]
         [(eqv? (car datum) 'let-exp)
             (append (list 'let (unparse-exp (2nd datum))) (unparse-exp (3rd datum)))]
+        [(eqv? (car datum) 'named-let-exp)
+            (append (list 'let (2nd datum) (unparse-exp (3rd datum))) (unparse-exp (cadddr datum)))]
         [(eqv? (car datum) 'let*-exp)
             (append (list 'let* (unparse-exp (2nd datum))) (unparse-exp (3rd datum)))]
         [(eqv? (car datum) 'letrec-exp)
@@ -382,7 +400,11 @@
                         (expand-case body))]
             [while-exp (test body)
                 (while-exp (syntax-expand test) (map syntax-expand body))]
-
+            [named-let-exp (name var-binds bodies)
+                (let ([vars (get-var-binds var-binds)]
+                        [binds (get-binds var-binds)])
+                    (syntax-expand (quasiquote (app-exp (letrec-exp ([(unquote name) (lambda-exp (unquote (cons name vars)) (unquote bodies))])
+                                                (unquote (list (list 'var-exp name)))) (unquote binds)))))]
             [else (eopl:error 'syntax-expand "not an expression ~s" exp)])))
 
 
