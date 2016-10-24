@@ -2,8 +2,8 @@
 ;; Easier to submit to server, probably harder to use in the development process
 ;; Brendan Goldacker and Cameron Metzger
 
-(load "C:/Users/goldacbj/Google Drive/Documents/CSSE/CSSE304/chez-init.ss") 
-;;(load "C:/Users/metzgecj/Desktop/Year3/PLC/chez-init.ss") 
+;;(load "C:/Users/goldacbj/Google Drive/Documents/CSSE/CSSE304/chez-init.ss") 
+(load "C:/Users/metzgecj/Desktop/Year3/PLC/chez-init.ss") 
 
 ;-------------------+
 ;                   |
@@ -329,7 +329,9 @@
             [if-exp (test then-exp)
                     (if-exp (syntax-expand test)
                                   (syntax-expand then-exp))]
-            [letrec-exp (var-binds body) (letrec-exp (map (lambda (var-bind) (list (car var-bind) (syntax-expand (cadar var-binds)))) var-binds) (map syntax-expand body))]
+            [letrec-exp (var-binds bodies) (syntax-expand (list 'let-exp (map list-with-false var-binds) (append (map add-set!-exp var-binds) bodies)))]
+           ;; [letrec-exp (var-binds bodies) (app-exp (lambda-exp (get-var-binds var-binds) (map syntax-expand bodies)) (append (map add-set!-exp var-binds)  (map syntax-expand (get-binds var-binds))))]
+
             [let*-exp (var-binds body) (letrec ([parse-let* (lambda (var-binds) 
                                                                 (if (null? (cdr var-binds)) 
                                                                     (app-exp (lambda-exp (list (caar var-binds)) (map syntax-expand body)) (list (syntax-expand (cadar var-binds))))
@@ -391,6 +393,14 @@
 (define get-binds 
     (lambda (let-bindings)
             (map cadr let-bindings)))
+
+(define list-with-false 
+    (lambda (let-bindings)
+        (list (car let-bindings) (lit-exp 0))))
+        
+(define add-set!-exp
+    (lambda (binding)
+            (list 'set!-exp (car binding) (syntax-expand (cadr binding)))))
 
 
 
@@ -464,11 +474,12 @@
                                         (eval-bodies bodies env)
                                         (eval-exp exp env))))])
             (while-helper))]
+    
     [set!-exp (var val-exp) 
         (set-ref! (apply-env-ref env var (lambda (x) x) ; procedure to call if id is in the environment 
            (lambda () (eopl:error 'apply-env ; procedure to call if id not in env
-		          "variable not found in environment: ~s"
-			   id))) (eval-exp val-exp env))]
+		          "variable found in environment: ~s"
+			   ) var)) (eval-exp val-exp env))]
     [else (eopl:error 'eval-exp "Bad abstract syntax: ~a" exp)])))
 
 ; evaluate the list of operands, putting results into a list
