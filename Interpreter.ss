@@ -403,7 +403,7 @@
             [named-let-exp (name var-binds bodies)
                 (let ([vars (get-var-binds var-binds)]
                         [binds (get-binds var-binds)])
-                    (syntax-expand (quasiquote (app-exp (letrec-exp ([(unquote name) (lambda-exp (unquote (cons name vars)) (unquote bodies))])
+                    (syntax-expand (quasiquote (app-exp (letrec-exp ([(unquote name) (lambda-exp (unquote vars) (unquote bodies))])
                                                 (unquote (list (list 'var-exp name)))) (unquote binds)))))]
             [else (eopl:error 'syntax-expand "not an expression ~s" exp)])))
 
