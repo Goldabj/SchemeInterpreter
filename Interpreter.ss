@@ -306,7 +306,7 @@
       (extended-env-record (syms vals env)
 	(let ((pos (list-find-position sym syms)))
       	  (if (number? pos)
-	      (succeed (list-ref vals pos))
+	      (succeed (ref (list-ref vals pos)))
 	      (apply-env-ref env sym succeed fail)))))))
 
 (define apply-env
@@ -439,7 +439,7 @@
 (define top-level-eval
   (lambda (form)
     ; later we may add things that are not expressions.
-    (eval-exp form init-env)))
+    (eval-exp form (empty-env))))
 
 ;helper functions for let-exp
 (define get-vars
@@ -470,9 +470,10 @@
       [var-exp (id)
 				(apply-env env id; look up its value.
       	   (lambda (x) x) ; procedure to call if id is in the environment 
-           (lambda () (eopl:error 'apply-env ; procedure to call if id not in env
-		          "variable not found in environment: ~s"
-			   id)))] 
+           (lambda () (apply-env global-env id (lambda (x) x) 
+                                              (lambda () (eopl:error 'apply-env ; procedure to call if id not in env
+		                                        "variable not found in environment: ~s"
+			                                     id)))))] 
       [app-exp (rator rands)
         (let ([proc-value (eval-exp rator env)]
               [args (eval-rands rands env)])
@@ -522,7 +523,7 @@
                     [vars (car vars-args)]
                     [args (cadr vars-args)])
                 (eval-bodies bodies (extend-env vars args env)))]
-      [prim-proc (op) (apply-prim-proc op args)]
+      [prim-proc (op) (apply-prim-proc op (map (lambda (x) (if (ref? x) (deref x) x)) args))]
 			; You will add other cases
       [else (eopl:error 'apply-proc
                    "Attempt to apply bad procedure: ~s" 
@@ -573,6 +574,11 @@
      (map prim-proc      
           *prim-proc-names*)
      (empty-env)))
+
+(define global-env  
+    init-env)
+
+(define reset-global-env (set! global-env init-env))
 
 ; Usually an interpreter must define each 
 ; built-in procedure individually.  We are "cheating" a little bit.
