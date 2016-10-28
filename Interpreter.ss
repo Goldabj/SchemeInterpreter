@@ -2,8 +2,8 @@
 ;; Easier to submit to server, probably harder to use in the development process
 ;; Brendan Goldacker and Cameron Metzger
 
-(load "C:/Users/goldacbj/Google Drive/Documents/CSSE/CSSE304/chez-init.ss") 
-;(load "C:/Users/metzgecj/Desktop/Year3/PLC/chez-init.ss") 
+;(load "C:/Users/goldacbj/Google Drive/Documents/CSSE/CSSE304/chez-init.ss") 
+(load "C:/Users/metzgecj/Desktop/Year3/PLC/chez-init.ss") 
 
 ;-------------------+
 ;                   |
@@ -64,6 +64,9 @@
         (name symbol?)
         (var-binds (list-of (lambda (x) (and (pair? x) (symbol? (car x)) (expression? (cadr x))))))
         (body (list-of expression?))]
+    [define-exp
+        (vars symbol?)
+        (body expression?)]
     [cond-exp 
         (cases (list-of (lambda (all-cases) (list-of (lambda (single-case) 
                             (and ((list-of expression?) (car x)) ((list-of expression?) (cadr x))))))))])
@@ -215,6 +218,8 @@
                     (case-exp (parse-exp (2nd datum)) (map (lambda (x) (list (car x) (parse-exp (cadr x)))) (cddr datum)))]
                 [(eqv? (car datum) 'while)
                     (while-exp (parse-exp (2nd datum)) (map parse-exp (cddr datum)))]
+                [(eqv? (car datum) 'define)
+                    (define-exp (2nd datum) (parse-exp (3rd datum)))]
                 [else (app-exp (parse-exp (1st datum)) ; (x y z ...) expression (x is a procedure, y z ... are paremeters)
 		            (map parse-exp (cdr datum)))])]
         [else (eopl:error 'parse-exp "bad expression: ~s" datum)])))
@@ -255,6 +260,7 @@
         [(eqv? (car datum) 'or-exp) (apply list 'or (map unparse-exp (2nd datum)))]
         [(eqv? (car datum) 'case-exp) (list 'case (unparse-exp (2nd datum)) (3rd datum))]
         [(eqv? (car datum) 'while-exp) (apply list 'while (unparse-exp (2nd datum)) (unparse-exp (3rd datum)))]
+        [(eqv? (car datum) 'define-exp) (list 'define (2nd datum) (unparse-exp (3rd datum)))]
         [else #f])])))
 
 
@@ -405,6 +411,8 @@
                         [binds (get-binds var-binds)])
                     (syntax-expand (quasiquote (app-exp (letrec-exp ([(unquote name) (lambda-exp (unquote vars) (unquote bodies))])
                                                 (unquote (list (list 'var-exp name)))) (unquote binds)))))]
+            [define-exp (var body) 
+                (define-exp var (syntax-expand body))]
             [else (eopl:error 'syntax-expand "not an expression ~s" exp)])))
 
 
@@ -503,6 +511,8 @@
            (lambda () (eopl:error 'apply-env ; procedure to call if id not in env
 		          "variable found in environment: ~s"
 			   ) var)) (eval-exp val-exp env))]
+    [define-exp (var body)
+        (set! global-env (extend-env var (eval-exp body env) global-env))]
     [else (eopl:error 'eval-exp "Bad abstract syntax: ~a" exp)])))
 
 ; evaluate the list of operands, putting results into a list
@@ -578,7 +588,7 @@
 (define global-env  
     init-env)
 
-(define reset-global-env (set! global-env init-env))
+(define reset-global-env (lambda () (set! global-env init-env)))
 
 ; Usually an interpreter must define each 
 ; built-in procedure individually.  We are "cheating" a little bit.
