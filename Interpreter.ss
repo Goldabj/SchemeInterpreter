@@ -376,10 +376,9 @@
                     (lit-exp #f)
                     (if (null? (cdr tests))
                         (syntax-expand (car tests))
-                        (syntax-expand (let-exp (list (list 'test-case) (list (syntax-expand (car tests))))
-                                                (list (if-else-exp (var-exp 'test-case)
-                                                        (var-exp 'test-case)
-                                                        (syntax-expand (list 'or-exp (cdr tests)))))))))]
+                        (if-else-exp (syntax-expand (car tests))
+                                     (syntax-expand (car tests))
+                                     (syntax-expand (list 'or-exp (cdr tests))))))]
 
             [begin-exp (list-of-bodies)
                   (syntax-expand (app-exp (lambda-exp '() list-of-bodies) '()))]
@@ -573,7 +572,7 @@
 (define *prim-proc-zero '(newline))
 
 (define *prim-proc-one '(add1 sub1 zero? not car cdr caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr null? 
-                                atom? length list->vector vector? list? pair? procedure? vector->list number? symbol? display))
+                                atom? length list->vector vector? list? pair? procedure? vector->list number? symbol?))
 
 (define *prim-proc-two '(= < > <= >= cons eq? equal? eqv? make-vector vector-ref set-car! set-cdr! assq member quotient list-tail))
 
@@ -635,7 +634,6 @@
                                                     [(vector->list) (vector->list (1st args))]
                                                     [(number?) (number? (1st args))]
                                                     [(symbol?) (symbol? (1st args))]
-                                                    [(display) (display (1st args))]
                                                     [else (eopl:error 'apply-prim-proc "programming error one")]))]
         [(member prim-proc *prim-proc-two) (if (not (equal? 2 (length args)))
                                                 (eopl:error 'apply-prim-proc "incorrect amount of arguments to ~s" prim-proc)
