@@ -508,11 +508,13 @@
     
     [set!-exp (var val-exp) 
         (set-ref! (apply-env-ref env var (lambda (x) x) ; procedure to call if id is in the environment 
-           (lambda () (eopl:error 'apply-env ; procedure to call if id not in env
-		          "variable found in environment: ~s"
-			   ) var)) (eval-exp val-exp env))]
+           (lambda () (apply-env-ref global-env var 
+                                                    (lambda (x) x)
+                                                    (lambda () (eopl:error 'apply-env ; procedure to call if id not in env
+		                                                    "variable found in environment: ~s"
+			                                                var))))) (eval-exp val-exp env))]
     [define-exp (var body)
-        (set! global-env (extend-env var (eval-exp body env) global-env))]
+        (set! global-env (extend-env (list var) (list (eval-exp body (empty-env))) global-env))]
     [else (eopl:error 'eval-exp "Bad abstract syntax: ~a" exp)])))
 
 ; evaluate the list of operands, putting results into a list
@@ -652,6 +654,7 @@
                                                     [(member) (member (1st args) (2nd args))]
                                                     [(list-tail) (list-tail (1st args) (2nd args))]
                                                     [(quotient) (quotient (1st args) (2nd args))]
+                                                    [(assq) (assq (1st args) (2nd args))]
                                                     [else (eopl:error 'apply-prim-proc "programming error two")]))]
         [(member prim-proc *prim-proc-three) (if (not (equal? 3 (length args)))
                                                 (eopl:error 'apply-prim-proc "incorrect amount of arguments to ~s" prim-proc)
