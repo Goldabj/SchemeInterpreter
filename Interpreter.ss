@@ -2,8 +2,8 @@
 ;; Easier to submit to server, probably harder to use in the development process
 ;; Brendan Goldacker and Cameron Metzger
 
-;(load "C:/Users/goldacbj/Google Drive/Documents/CSSE/CSSE304/chez-init.ss") 
-(load "C:/Users/metzgecj/Desktop/Year3/PLC/chez-init.ss") 
+(load "C:/Users/goldacbj/Google Drive/Documents/CSSE/CSSE304/chez-init.ss") 
+;(load "C:/Users/metzgecj/Desktop/Year3/PLC/chez-init.ss") 
 
 ;-------------------+
 ;                   |
@@ -306,7 +306,7 @@
       (extended-env-record (syms vals env)
 	(let ((pos (list-find-position sym syms)))
       	  (if (number? pos)
-	      (succeed (ref (list-ref vals pos)))
+	      (succeed (list-ref vals pos))
 	      (apply-env-ref env sym succeed fail)))))))
 
 (define apply-env
@@ -470,7 +470,7 @@
       [var-exp (id)
 				(apply-env env id; look up its value.
       	   (lambda (x) x) ; procedure to call if id is in the environment 
-           (lambda () (apply-env global-env id (lambda (x) x) 
+           (lambda () (apply-env-ref global-env id (lambda (x) x) 
                                               (lambda () (eopl:error 'apply-env ; procedure to call if id not in env
 		                                        "variable not found in environment: ~s"
 			                                     id)))))] 
@@ -523,7 +523,7 @@
                     [vars (car vars-args)]
                     [args (cadr vars-args)])
                 (eval-bodies bodies (extend-env vars args env)))]
-      [prim-proc (op) (apply-prim-proc op (map (lambda (x) (if (ref? x) (deref x) x)) args))]
+      [prim-proc (op) (apply-prim-proc op args)]
 			; You will add other cases
       [else (eopl:error 'apply-proc
                    "Attempt to apply bad procedure: ~s" 
