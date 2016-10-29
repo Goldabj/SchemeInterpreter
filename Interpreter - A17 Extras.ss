@@ -1,3 +1,12 @@
+; if we get a (lambda (a (ref b) c) body..) expression then in the app-exp we are going to syntax-expand
+; to change ((lambda-exp (a (ref b) c) body...) (lit-exp 1) (var-exp x) (lit-exp 2)) to (app-exp (lambda (a b c) body...) (lit-exp 1) (var-ref-exp x) (lit-exp 2))
+
+; added new var-ref-exp expression type
+; added var-ref-exp to eval-exp 
+; added var-ref-exp to syntax-expand
+; mostly changed app-exp which was the only hard part (added ref-app-exp func to help with the syntax-expanding)
+
+
 ;:  Single-file version of the interpreter.
 ;; Easier to submit to server, probably harder to use in the development process
 ;; Brendan Goldacker and Cameron Metzger
@@ -22,8 +31,9 @@
 ; datatypes: lambda-exp, variable, lit-exp, if-exp, if-else-exp, let-exp, letrec-exp, let*-exp, set!-exp
 (define-datatype expression expression?
     [var-exp (id symbol?)]
+    [var-ref-exp (id symbol?)]
     [lambda-exp
-        (vars (lambda (x) (or  (and (pair? x) (not (list? x))) (null? x) (symbol? x) ((list-of symbol?) x))))
+        (vars (lambda (x) (or  (and (pair? x) (not (list? x))) (null? x) (symbol? x) ((list-of (lambda (y) (or (pair? y) (symbol? y)))) x))))
         (body (lambda (x) (or ((list-of expression?) x) (symbol? x))))]
     [app-exp
         (rator expression?)
@@ -344,8 +354,15 @@
             [var-exp (var) (var-exp var)]
             [lambda-exp (vars bodies) 
                  (lambda-exp vars (map syntax-expand bodies))]
-            [app-exp (rator rands) (app-exp (syntax-expand rator)
-                                            (map syntax-expand rands))]
+            [var-ref-exp (id)
+                (var-ref-exp id)]
+            [app-exp (rator rands)
+                (if (equal? (caar rator) 'lambda-exp)
+                    (let* ([new-app-exp (ref-app-exp rator rands)]
+                            [rat (car new-app-exp)]
+                            [ran (cadr new-app-exp)])
+                        (app-exp (syntax-expand rat) (map syntax-expand ran)))
+                    (app-exp (syntax-exapnd rator) (map syntax-expand rands)))]
             [if-else-exp (test then-exp else-exp)
                     (if-else-exp (syntax-expand test)
                                   (syntax-expand then-exp)
@@ -433,6 +450,28 @@
     (lambda (binding)
             (list 'set!-exp (car binding) (syntax-expand (cadr binding)))))
 
+; takes app exp where rator is a lambda and finds ref args and changes the coresisponding rands
+;returns a app-exp with the new lambda vars and the new args 
+(define ref-app-exp
+    (lambda (func rands)
+        ; args are (cadr func), rands are a list of expressions 
+        (let* ([vars-args (flatten-vars-args (cadr func) rands)]
+                [vars (car vars-args)]
+                [args (cadr vars-args)])
+            (let* ([new-vars-args (change-references vars args '() '())]
+                    [new-vars (car new-vars-args)]
+                    [new-args (cadr new-vars-args)])
+                (app-exp (lambda-exp new-vars (caddr func)) new-args)))))
+
+; returns a list of the unrefed vars and the new refed args
+(define  change-references
+    (lambda (vars args new-vars new-args)
+        (if (null? vars)
+            (list (reverse new-vars) (reverse new-args))
+            (if (pair? (car vars)) ; (ref x) exp
+               (change-references (cdr vars) (cdr args) (cons (cadar vars) new-vars) (cons (var-ref-exp (cadar args)) new-args))
+               (change-references (cdr vars) (cdr args) (cons (car vars) new-vars) (cons (car args) new-args))))))
+
 
 
 ;-------------------+
@@ -482,11 +521,18 @@
            (lambda () (apply-env-ref global-env id (lambda (x) x) 
                                               (lambda () (eopl:error 'apply-env ; procedure to call if id not in env
 		                                        "variable not found in environment: ~s"
-			                                     id)))))] 
+			                                     id)))))]
+    [var-ref-exp (id)
+        (apply-env-ref env id 
+            (lambda (x) x)
+            (lambda () (apply-env-ref global-env id (lambda (x) x) 
+                                              (lambda () (eopl:error 'apply-env ; procedure to call if id not in env
+		                                        "variable not found in environment: ~s"
+			                                     id)))))]
       [app-exp (rator rands)
         (let ([proc-value (eval-exp rator env)]
               [args (eval-rands rands env)])
-          (apply-proc proc-value args))]
+            (apply-proc proc-value args))]
      [if-else-exp (test-exp then-exp else-exp)
         (if (eval-exp test-exp env)    ;;need to add enviornments
             (eval-exp then-exp env)    
