@@ -357,12 +357,12 @@
             [var-ref-exp (id)
                 (var-ref-exp id)]
             [app-exp (rator rands)
-                (if (equal? (caar rator) 'lambda-exp)
+                (if (equal? (car rator) 'lambda-exp)
                     (let* ([new-app-exp (ref-app-exp rator rands)]
-                            [rat (car new-app-exp)]
-                            [ran (cadr new-app-exp)])
+                            [rat (cadr new-app-exp)]
+                            [ran (caddr new-app-exp)])
                         (app-exp (syntax-expand rat) (map syntax-expand ran)))
-                    (app-exp (syntax-exapnd rator) (map syntax-expand rands)))]
+                    (app-exp (syntax-expand rator) (map syntax-expand rands)))]
             [if-else-exp (test then-exp else-exp)
                     (if-else-exp (syntax-expand test)
                                   (syntax-expand then-exp)
