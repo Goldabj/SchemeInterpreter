@@ -1,10 +1,6 @@
-; if we get a (lambda (a (ref b) c) body..) expression then in the app-exp we are going to syntax-expand
-; to change ((lambda-exp (a (ref b) c) body...) (lit-exp 1) (var-exp x) (lit-exp 2)) to (app-exp (lambda (a b c) body...) (lit-exp 1) (var-ref-exp x) (lit-exp 2))
-
-; added new var-ref-exp expression type
-; added var-ref-exp to eval-exp 
-; added var-ref-exp to syntax-expand
-; mostly changed app-exp which was the only hard part (added ref-app-exp func to help with the syntax-expanding)
+; we are going to use lexicfy after we syntax expand to leicfy all the vars
+; it will use cases to keep the code simpler
+; it will turn (lambda-exp (a b c) (var-exp a)) to (lambda-exp (a b c) (var-exp (: 0 0))
 
 
 ;:  Single-file version of the interpreter.
@@ -30,8 +26,8 @@
 
 ; datatypes: lambda-exp, variable, lit-exp, if-exp, if-else-exp, let-exp, letrec-exp, let*-exp, set!-exp
 (define-datatype expression expression?
-    [var-exp (id symbol?)]
-    [var-ref-exp (id symbol?)]
+    [var-exp (id (lambda (x) (or (symbol? x) (list? x))))]
+    [var-ref-exp (id (lambda (x) (or (symbol? x) (list? x))))]
     [lambda-exp
         (vars (lambda (x) (or  (and (pair? x) (not (list? x))) (null? x) (symbol? x) ((list-of (lambda (y) (or (pair? y) (symbol? y)))) x))))
         (body (lambda (x) (or ((list-of expression?) x) (symbol? x))))]
@@ -56,7 +52,7 @@
         (var-binds (list-of (lambda (x) (and (pair? x) (symbol? (car x)) (expression? (cadr x))))))
         (body (list-of expression?))]
     [set!-exp
-        (var symbol?)
+        (var (lambda (x) (or (symbol? x) (list? x))))
         (value expression?)]
     [and-exp 
         (tests (list-of expression?))]
@@ -75,7 +71,7 @@
         (var-binds (list-of (lambda (x) (and (pair? x) (symbol? (car x)) (expression? (cadr x))))))
         (body (list-of expression?))]
     [define-exp
-        (vars symbol?)
+        (vars (lambda (x) (or (symbol? x) (list? x))))
         (body expression?)]
     [cond-exp 
         (cases (list-of (lambda (all-cases) (list-of (lambda (single-case) 
@@ -467,6 +463,71 @@
 
 
 
+
+;-------------------+
+;                   |
+;   Lexcify         |
+;                   |
+;-------------------+
+
+
+(define lexcify
+    (lambda (exp vars)
+        (cases expression exp
+             [lit-exp (datum) 
+                (lit-exp datum)]
+            [var-exp (id)
+                (var-exp (get-lexical-address id vars))]
+            [var-ref-exp (id)
+                (var-ref-exp (get-lexical-address id vars))]
+            [app-exp (rator rands)
+                (app-exp (lexcify rator vars) (map (lambda (x) (lexcify x vars)) rands))] 
+            [if-else-exp (test-exp then-exp else-exp) 
+                (if-else-exp (lexcify test-exp vars) (lexcify then-exp vars) (lexcify else-exp vars))]
+            [if-exp (test-exp then-exp)
+                (if-exp (lexcify tets-exp vars) (lexcify then-exp vars))]
+            [lambda-exp (var-ls bodies)
+                (let ([new-vars (cons var-ls vars)])
+                    (lambda-exp var-ls (map (lambda (x) (lexcify x new-vars)) bodies)))]
+            [let-exp (var-binds bodies) 
+                (let ([new-vars (cons (get-vars var-binds) vars)])
+                    (let-exp (map (lambda (x) (cons (car x) (lexcify (cadr x) vars))) var-binds) (map (lambda (x) (lexicfy x new-vars)) bodies)))]
+            [while-exp (test bodies)
+                (while-exp (lexcify test) (map (lambda (x) (lexcify x vars)) bodies))]
+            [set!-exp (var val-exp) 
+                (set!-exp (get-lexical-address var vars) (lexcify val-exp vars))]
+            [define-exp (var body)
+                (define-exp (get-lexical-address var vars) (lexcify body vars))]
+            [else (eopl:error 'lexicfy "Bad abstract syntax: ~a" exp)])))
+
+
+; given a var-list in the form ((a b) (c d e) (f)) it returns the lexial address
+; such as f would be (: 2 0)
+(define get-lexical-address
+    (lambda (var var-list)
+        (letrec (
+            [get-lex (lambda (var-list depth)
+                (if (null? var-list)
+                    (list ': 'free var)
+                    (letrec ([check-local (lambda (local-vars address)
+                                (if (null? local-vars)
+                                    #f
+                                    (if (equal? var (car local-vars))
+                                        (list ': depth address)
+                                        (check-local (cdr local-vars) (+ address 1)))))])
+                        (let ([lex (check-local (car var-list) 0)])
+                            (if lex 
+                                lex
+                                (get-lex (cdr var-list) (+ depth 1)))))))])
+            (get-lex var-list 0))))
+                                
+            
+
+
+
+
+
+
 ;-------------------+
 ;                   |
 ;   INTERPRETER     |
@@ -556,7 +617,6 @@
                                         (eval-bodies bodies env)
                                         (eval-exp exp env))))])
             (while-helper))]
-    
     [set!-exp (var val-exp) 
         (set-ref! (let ([var-ref (apply-env-ref env var 
 					(lambda (x) x) ; procedure to call if id is in the environment
@@ -740,13 +800,13 @@
   (lambda ()
     (display "--> ")
     ;; notice that we don't save changes to the environment...
-    (let ([answer (un-closure (top-level-eval (syntax-expand (parse-exp (read)))))])
+    (let ([answer (un-closure (top-level-eval (lexcify (syntax-expand (parse-exp (read))))))])
       ;; TODO: are there answers that should display differently
         (eopl:pretty-print answer) (newline)
       (rep))))  ; tail-recursive, so stack doesn't grow.
 
 (define eval-one-exp
-  (lambda (x) (top-level-eval (syntax-expand (parse-exp x)))))
+  (lambda (x) (top-level-eval  (lexcify (syntax-expand (parse-exp x))))))
 
 
 
