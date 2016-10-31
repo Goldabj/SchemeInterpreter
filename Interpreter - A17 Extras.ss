@@ -103,7 +103,7 @@
   [prim-proc
    (name in-prim?)]
    [closure
-   (vars (lambda (x) (or  (and (pair? x) (not (list? x))) (null? x) (symbol? x) ((list-of symbol?) x))))
+    (vars (lambda (x) (or  (and (pair? x) (not (list? x))) (null? x) (symbol? x) ((list-of (lambda (y) (or (pair? y) (symbol? y)))) x))))
    (bodies (list-of expression?))
    (env environment?)])
 
@@ -148,8 +148,6 @@
                     ;error checking 
                    (cond [(< (length datum) 3)
                              (eopl:error 'parse-exp "lambda-expression: incorrect length ~s" datum)]
-                        [(and (list? (2nd datum)) (not ((list-of symbol?) (2nd datum))))
-                            (eopl:error 'parse-exp "lambda's formal arguments ~s must all be symbols" (2nd datum))]
                         [else 
                           (if (list? (2nd datum))
                              (lambda-exp (2nd datum) ; (lambda (x) body ...) expression (adds paren around body)
@@ -357,12 +355,7 @@
             [var-ref-exp (id)
                 (var-ref-exp id)]
             [app-exp (rator rands)
-                (if (equal? (car rator) 'lambda-exp)
-                    (let* ([new-app-exp (ref-app-exp rator rands)]
-                            [rat (cadr new-app-exp)]
-                            [ran (caddr new-app-exp)])
-                        (app-exp (syntax-expand rat) (map syntax-expand ran)))
-                    (app-exp (syntax-expand rator) (map syntax-expand rands)))]
+                    (app-exp (syntax-expand rator) (map syntax-expand rands))]
             [if-else-exp (test then-exp else-exp)
                     (if-else-exp (syntax-expand test)
                                   (syntax-expand then-exp)
@@ -450,8 +443,8 @@
     (lambda (binding)
             (list 'set!-exp (car binding) (syntax-expand (cadr binding)))))
 
-; takes app exp where rator is a lambda and finds ref args and changes the coresisponding rands
-;returns a app-exp with the new lambda vars and the new args 
+; takes app exp where rator is a closure and finds ref args and changes the coresisponding rands
+;returns a app-exp with the new closure vars and the new args 
 (define ref-app-exp
     (lambda (func rands)
         ; args are (cadr func), rands are a list of expressions 
@@ -461,7 +454,7 @@
             (let* ([new-vars-args (change-references vars args '() '())]
                     [new-vars (car new-vars-args)]
                     [new-args (cadr new-vars-args)])
-                (app-exp (lambda-exp new-vars (caddr func)) new-args)))))
+                (syntax-expand (app-exp (lambda-exp new-vars (caddr func)) new-args))))))
 
 ; returns a list of the unrefed vars and the new refed args
 (define  change-references
@@ -506,6 +499,12 @@
 (define ref? box?)
 (define ref box)
 
+(define unreference 
+    (lambda (obj)
+        (if (ref? obj)
+            (deref obj)
+            obj)))
+
 ; eval-exp is the main component of the interpreter
 
 (define eval-exp
@@ -516,12 +515,12 @@
                     (cadr datum)
                     datum)]
       [var-exp (id)
-				(apply-env env id; look up its value.
+				(unreference (apply-env env id; look up its value.
       	   (lambda (x) x) ; procedure to call if id is in the environment 
            (lambda () (apply-env-ref global-env id (lambda (x) x) 
                                               (lambda () (eopl:error 'apply-env ; procedure to call if id not in env
 		                                        "variable not found in environment: ~s"
-			                                     id)))))]
+			                                     id))))))]
     [var-ref-exp (id)
         (apply-env-ref env id 
             (lambda (x) x)
@@ -530,9 +529,14 @@
 		                                        "variable not found in environment: ~s"
 			                                     id)))))]
       [app-exp (rator rands)
-        (let ([proc-value (eval-exp rator env)]
-              [args (eval-rands rands env)])
-            (apply-proc proc-value args))]
+        (let ([proc-value (eval-exp rator env)])
+           (if (equal? (car proc-value) 'closure)
+                (let* ([new-app-exp (ref-app-exp proc-value rands)]
+                        [proc-value (closure (cadadr new-app-exp) (caddr proc-value) (cadddr proc-value))]
+                       [args (eval-rands (caddr new-app-exp) env)])
+                    (apply-proc proc-value args))
+                (let ([args (eval-rands rands env)])
+                    (apply-proc proc-value args))))]
      [if-else-exp (test-exp then-exp else-exp)
         (if (eval-exp test-exp env)    ;;need to add enviornments
             (eval-exp then-exp env)    
@@ -554,12 +558,20 @@
             (while-helper))]
     
     [set!-exp (var val-exp) 
-        (set-ref! (apply-env-ref env var (lambda (x) x) ; procedure to call if id is in the environment 
-           (lambda () (apply-env-ref global-env var 
-                                                    (lambda (x) x)
-                                                    (lambda () (eopl:error 'apply-env ; procedure to call if id not in env
-		                                                    "variable found in environment: ~s"
-			                                                var))))) (eval-exp val-exp env))]
+        (set-ref! (let ([var-ref (apply-env-ref env var 
+					(lambda (x) x) ; procedure to call if id is in the environment
+					(lambda ()
+						(apply-env-ref global-env var (lambda (x) x)
+						(lambda () (eopl:error 'apply-env ; procedure to call if id not in env
+							"variable not found in environment: ~s"
+							var)))))])
+					(if (ref? (deref var-ref))
+						(deref var-ref)
+						var-ref))
+                    (let ([val (eval-exp val-exp env)])
+                        (if (ref? val)
+                            (deref val)
+                            val)))]
     [define-exp (var body)
         (set! global-env (extend-env (list var) (list (eval-exp body (empty-env))) global-env))]
     [else (eopl:error 'eval-exp "Bad abstract syntax: ~a" exp)])))
@@ -595,7 +607,7 @@
                                 (eopl:error 'flatten-vars-args "lamnbda expexted no args, but got ~s" args)
                                 (list '() '()))]
             [(symbol? vars) (list (list vars) (list args))]
-            [(symbol? (car vars)) (if (and (null? (cdr vars)) (not (null? (cdr args))))
+            [(or (pair? (car vars)) symbol? (car vars)) (if (and (null? (cdr vars)) (not (null? (cdr args))))
                                     (eopl:error 'flatten-vars-args "incorrect amount of arguments to procedure ~s" args)
                                     (if (symbol? (cdr vars))
                                         (if (null? (cdr args))
