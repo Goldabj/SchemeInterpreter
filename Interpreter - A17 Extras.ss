@@ -308,17 +308,34 @@
 		 (+ 1 list-index-r)
 		 #f))))))
 
+
 (define apply-env-ref
     (lambda (env sym succeed fail)
-         (cases environment env
-      (empty-env-record ()
-        (fail))
-      (extended-env-record (syms vals env)
-	(let ((pos (list-find-position sym syms)))
-      	  (if (number? pos)
-	      (succeed (list-ref vals pos))
-	      (apply-env-ref env sym succeed fail)))))))
+        (if (equal? (cadr sym) 'free)
+            (apply-env-ref-lex global-env (caddr sym) succeed fail)
+            (letrec ([get-to-depth (lambda (current-depth current-env)
+                        (if (equal? (cadr sym) current-depth)
+                            (apply-env-ref-lex current-env (caddr sym) succeed fail)
+                            (get-to-depth (+ 1 current-depth) (cadddr env))))])
+                (get-to-depth 0 env)))))
 
+
+(define apply-env-ref-lex 
+    (lambda (env sym succeed fail)
+         (cases environment env
+            (empty-env-record ()
+                      (fail))
+            (extended-env-record (syms vals env)
+                (if (symbol? sym) ; looking up in global env
+                    (let ([pos (list-find-position sym syms)])
+                        (if (number? pos)
+                            (succeed (list-ref vals pos))
+                            (eopl:error 'apply-env "var does not exsist in gloabl ~s" sym)))
+	                (let ([val (list-ref vals sym)]) ; looking up in local var
+	                        (succeed val)))))))
+
+
+;sym will be a list (: depth address) or (: free address))
 (define apply-env
   (lambda (env sym succeed fail) ; succeed and fail are procedures applied if the var is or isn't found, respectively.
     (deref (apply-env-ref env sym succeed fail))))
@@ -447,7 +464,7 @@
         (let* ([vars-args (flatten-vars-args (cadr func) rands)]
                 [vars (car vars-args)]
                 [args (cadr vars-args)])
-            (let* ([new-vars-args (change-references vars args '() '())]
+            (let* ([new-vars-args (change-references vars rands '() '())]
                     [new-vars (car new-vars-args)]
                     [new-args (cadr new-vars-args)])
                 (syntax-expand (app-exp (lambda-exp new-vars (caddr func)) new-args))))))
@@ -487,7 +504,7 @@
             [if-exp (test-exp then-exp)
                 (if-exp (lexcify tets-exp vars) (lexcify then-exp vars))]
             [lambda-exp (var-ls bodies)
-                (let ([new-vars (cons var-ls vars)])
+                (let ([new-vars (cons (flatten-vars var-ls) vars)])
                     (lambda-exp var-ls (map (lambda (x) (lexcify x new-vars)) bodies)))]
             [let-exp (var-binds bodies) 
                 (let ([new-vars (cons (get-vars var-binds) vars)])
@@ -497,7 +514,7 @@
             [set!-exp (var val-exp) 
                 (set!-exp (get-lexical-address var vars) (lexcify val-exp vars))]
             [define-exp (var body)
-                (define-exp (get-lexical-address var vars) (lexcify body vars))]
+                (define-exp var (lexcify body vars))]
             [else (eopl:error 'lexicfy "Bad abstract syntax: ~a" exp)])))
 
 
@@ -660,6 +677,20 @@
                    "Attempt to apply bad procedure: ~s" 
                     proc-value)])))
 
+(define flatten-vars
+    (lambda (vars)
+        (cond 
+            [(null? vars) '()]
+            [(symbol? vars) (list vars)]
+            [(or (pair? (car vars)) (symbol? (car vars)))
+                 (if (null? (cdr vars))
+                    vars
+                    (if (symbol? (cdr vars))
+                        (cons (car vars) (list (cdr vars)))
+                        (cons (car vars) (flatten-vars (cdr vars)))))])))
+
+
+
 (define flatten-vars-args 
     (lambda (vars args)
         (cond 
@@ -667,7 +698,7 @@
                                 (eopl:error 'flatten-vars-args "lamnbda expexted no args, but got ~s" args)
                                 (list '() '()))]
             [(symbol? vars) (list (list vars) (list args))]
-            [(or (pair? (car vars)) symbol? (car vars)) (if (and (null? (cdr vars)) (not (null? (cdr args))))
+            [(or (pair? (car vars)) (symbol? (car vars))) (if (and (null? (cdr vars)) (not (null? (cdr args))))
                                     (eopl:error 'flatten-vars-args "incorrect amount of arguments to procedure ~s" args)
                                     (if (symbol? (cdr vars))
                                         (if (null? (cdr args))
@@ -800,13 +831,13 @@
   (lambda ()
     (display "--> ")
     ;; notice that we don't save changes to the environment...
-    (let ([answer (un-closure (top-level-eval (lexcify (syntax-expand (parse-exp (read))))))])
+    (let ([answer (un-closure (top-level-eval (lexcify (syntax-expand (parse-exp (read))) '() )))])
       ;; TODO: are there answers that should display differently
         (eopl:pretty-print answer) (newline)
       (rep))))  ; tail-recursive, so stack doesn't grow.
 
 (define eval-one-exp
-  (lambda (x) (top-level-eval  (lexcify (syntax-expand (parse-exp x))))))
+  (lambda (x) (top-level-eval  (lexcify (syntax-expand (parse-exp x)) '() ))))
 
 
 
