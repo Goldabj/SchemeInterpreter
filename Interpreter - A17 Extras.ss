@@ -316,7 +316,7 @@
             (letrec ([get-to-depth (lambda (current-depth current-env)
                         (if (equal? (cadr sym) current-depth)
                             (apply-env-ref-lex current-env (caddr sym) succeed fail)
-                            (get-to-depth (+ 1 current-depth) (cadddr env))))])
+                            (get-to-depth (+ 1 current-depth) (cadddr current-env))))])
                 (get-to-depth 0 env)))))
 
 
@@ -330,7 +330,7 @@
                     (let ([pos (list-find-position sym syms)])
                         (if (number? pos)
                             (succeed (list-ref vals pos))
-                            (eopl:error 'apply-env "var does not exsist in gloabl ~s" sym)))
+                            (apply-env-ref-lex env sym succeed fail)))
 	                (let ([val (list-ref vals sym)]) ; looking up in local var
 	                        (succeed val)))))))
 
@@ -422,9 +422,9 @@
                                             (if (equal? 'else (caar body))
                                                 (syntax-expand (cadar body))
                                                 (if (null? (cdr body))
-                                                    (if-exp (app-exp (var-exp 'member) (list key (list 'lit-exp (caar body))))
+                                                    (if-exp (app-exp (var-exp 'member) (list key (list 'lit-exp (list 'quote (caar body)))))
                                                         (syntax-expand (cadar body)))
-                                                    (if-else-exp (app-exp (var-exp 'member) (list key (list 'lit-exp (caar body))))
+                                                    (if-else-exp (app-exp (var-exp 'member) (list key (list 'lit-exp  (list 'quote (caar body)))))
                                                         (syntax-expand (cadar body))
                                                         (expand-case (cdr body))))))])
                         (expand-case body))]
@@ -456,29 +456,6 @@
     (lambda (binding)
             (list 'set!-exp (car binding) (syntax-expand (cadr binding)))))
 
-; takes app exp where rator is a closure and finds ref args and changes the coresisponding rands
-;returns a app-exp with the new closure vars and the new args 
-(define ref-app-exp
-    (lambda (func rands)
-        ; args are (cadr func), rands are a list of expressions 
-        (let* ([vars-args (flatten-vars-args (cadr func) rands)]
-                [vars (car vars-args)]
-                [args (cadr vars-args)])
-            (let* ([new-vars-args (change-references vars rands '() '())]
-                    [new-vars (car new-vars-args)]
-                    [new-args (cadr new-vars-args)])
-                (syntax-expand (app-exp (lambda-exp new-vars (caddr func)) new-args))))))
-
-; returns a list of the unrefed vars and the new refed args
-(define  change-references
-    (lambda (vars args new-vars new-args)
-        (if (null? vars)
-            (list (reverse new-vars) (reverse new-args))
-            (if (pair? (car vars)) ; (ref x) exp
-               (change-references (cdr vars) (cdr args) (cons (cadar vars) new-vars) (cons (var-ref-exp (cadar args)) new-args))
-               (change-references (cdr vars) (cdr args) (cons (car vars) new-vars) (cons (car args) new-args))))))
-
-
 
 
 ;-------------------+
@@ -502,7 +479,7 @@
             [if-else-exp (test-exp then-exp else-exp) 
                 (if-else-exp (lexcify test-exp vars) (lexcify then-exp vars) (lexcify else-exp vars))]
             [if-exp (test-exp then-exp)
-                (if-exp (lexcify tets-exp vars) (lexcify then-exp vars))]
+                (if-exp (lexcify test-exp vars) (lexcify then-exp vars))]
             [lambda-exp (var-ls bodies)
                 (let ([new-vars (cons (flatten-vars var-ls) vars)])
                     (lambda-exp var-ls (map (lambda (x) (lexcify x new-vars)) bodies)))]
@@ -510,7 +487,7 @@
                 (let ([new-vars (cons (get-vars var-binds) vars)])
                     (let-exp (map (lambda (x) (cons (car x) (lexcify (cadr x) vars))) var-binds) (map (lambda (x) (lexicfy x new-vars)) bodies)))]
             [while-exp (test bodies)
-                (while-exp (lexcify test) (map (lambda (x) (lexcify x vars)) bodies))]
+                (while-exp (lexcify test vars) (map (lambda (x) (lexcify x vars)) bodies))]
             [set!-exp (var val-exp) 
                 (set!-exp (get-lexical-address var vars) (lexcify val-exp vars))]
             [define-exp (var body)
@@ -539,11 +516,6 @@
             (get-lex var-list 0))))
                                 
             
-
-
-
-
-
 
 ;-------------------+
 ;                   |
@@ -607,14 +579,14 @@
 		                                        "variable not found in environment: ~s"
 			                                     id)))))]
       [app-exp (rator rands)
-        (let ([proc-value (eval-exp rator env)])
-           (if (equal? (car proc-value) 'closure)
-                (let* ([new-app-exp (ref-app-exp proc-value rands)]
-                        [proc-value (closure (cadadr new-app-exp) (caddr proc-value) (cadddr proc-value))]
+           (if (equal? (car rator) 'lambda-exp)
+                (let* ([new-app-exp (ref-app-exp rator rands)]
+                        [proc-value (eval-exp (cadr new-app-exp) env)]
                        [args (eval-rands (caddr new-app-exp) env)])
                     (apply-proc proc-value args))
-                (let ([args (eval-rands rands env)])
-                    (apply-proc proc-value args))))]
+                (let ([proc-value (eval-exp rator env)]
+                        [args (eval-rands rands env)])
+                    (apply-proc proc-value args)))]
      [if-else-exp (test-exp then-exp else-exp)
         (if (eval-exp test-exp env)    ;;need to add enviornments
             (eval-exp then-exp env)    
@@ -650,8 +622,47 @@
                             (deref val)
                             val)))]
     [define-exp (var body)
-        (set! global-env (extend-env (list var) (list (eval-exp body (empty-env))) global-env))]
+        (let ([new-env (extend-env (list var) (list (eval-exp body (empty-env))) global-env)])
+            (set! global-env new-env))]
     [else (eopl:error 'eval-exp "Bad abstract syntax: ~a" exp)])))
+
+
+
+; takes app exp where rator is a closure and finds ref args and changes the coresisponding rands
+;returns a app-exp with the new closure vars and the new args 
+(define ref-app-exp
+    (lambda (func rands)
+        (if (or (null? (cadr func)) (symbol? (cadr func))) ; if the vars are a single symbol or empty 
+          (app-exp (lambda-exp (cadr func) (caddr func)) rands)
+        ; args are (cadr func), rands are a list of expressions 
+        (let* ([vars (cadr func)])
+            (let* ([new-vars-args (change-references vars rands '() '())]
+                    [new-vars (car new-vars-args)]
+                    [new-args (cadr new-vars-args)])
+                (app-exp (lambda-exp new-vars (caddr func)) new-args))))))
+
+; returns a list of the unrefed vars and the new refed args
+(define  change-references
+    (lambda (vars args new-vars new-args)
+        (cond 
+            [(pair? (car vars)) ; (ref x) exp
+                (cond 
+                    [(symbol? (cdr vars))                                        
+                        (list (append new-vars (cons (cadar vars) (cdr vars))) (append new-args (cons (var-ref-exp (cadar args)) (cdr args))))]
+                    [(null? (cdr vars))
+                        (list (append new-vars (list (cadar vars))) (append new-args (list (var-ref-exp (cadar args)))))]
+                    [else ;normal cdr
+                        (let ([var-args (change-references (cdr vars) (cdr args) new-vars new-args)])
+                            (list (cons (cadar vars) (car var-args)) (cons (var-ref-exp (cadar args)) (cadr var-args))))])]
+            [else ; regular exp
+                (cond 
+                    [(symbol? (cdr vars))
+                        (list (append new-vars (cons (car vars) (cdr vars))) (append new-args args))]
+                    [(null? (cdr vars))
+                        (list (append new-vars (list (car vars))) (append new-args args))]
+                    [else ;normal cdr
+                        (let ([var-args (change-references (cdr vars) (cdr args) new-vars new-args)])
+                            (list (cons (car vars) (car var-args)) (cons (car args) (cadr var-args))))])])))
 
 ; evaluate the list of operands, putting results into a list
 
