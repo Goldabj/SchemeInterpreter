@@ -481,7 +481,7 @@
             [if-exp (test-exp then-exp)
                 (if-exp (lexcify test-exp vars) (lexcify then-exp vars))]
             [lambda-exp (var-ls bodies)
-                (let ([new-vars (cons (flatten-vars var-ls) vars)])
+                (let ([new-vars (cons (flatten-ref (flatten-vars var-ls)) vars)])
                     (lambda-exp var-ls (map (lambda (x) (lexcify x new-vars)) bodies)))]
             [let-exp (var-binds bodies) 
                 (let ([new-vars (cons (get-vars var-binds) vars)])
@@ -514,7 +514,17 @@
                                 lex
                                 (get-lex (cdr var-list) (+ depth 1)))))))])
             (get-lex var-list 0))))
-                                
+                    
+
+(define flatten-ref 
+    (lambda (syms)
+        (if (null? syms)
+            '()
+            (if (pair? syms)
+                (if (pair? (car syms))
+                    (cons (cadar syms) (flatten-ref (cdr syms)))
+                    (cons (car syms) (flatten-ref (cdr syms))))
+                (car syms)))))
             
 
 ;-------------------+
@@ -579,14 +589,14 @@
 		                                        "variable not found in environment: ~s"
 			                                     id)))))]
       [app-exp (rator rands)
-           (if (equal? (car rator) 'lambda-exp)
-                (let* ([new-app-exp (ref-app-exp rator rands)]
-                        [proc-value (eval-exp (cadr new-app-exp) env)]
-                       [args (eval-rands (caddr new-app-exp) env)])
+        (let ([proc-value (eval-exp rator env)])
+           (if (equal? (car proc-value) 'closure)
+                (let* ([new-app-exp (ref-app-exp proc-value rands)]
+                        [proc-value (car new-app-exp)]
+                       [args (eval-rands (cadr new-app-exp) env)])
                     (apply-proc proc-value args))
-                (let ([proc-value (eval-exp rator env)]
-                        [args (eval-rands rands env)])
-                    (apply-proc proc-value args)))]
+                (let ([args (eval-rands rands env)])
+                    (apply-proc proc-value args))))]
      [if-else-exp (test-exp then-exp else-exp)
         (if (eval-exp test-exp env)    ;;need to add enviornments
             (eval-exp then-exp env)    
@@ -633,13 +643,13 @@
 (define ref-app-exp
     (lambda (func rands)
         (if (or (null? (cadr func)) (symbol? (cadr func))) ; if the vars are a single symbol or empty 
-          (app-exp (lambda-exp (cadr func) (caddr func)) rands)
+          (list func rands)
         ; args are (cadr func), rands are a list of expressions 
         (let* ([vars (cadr func)])
             (let* ([new-vars-args (change-references vars rands '() '())]
                     [new-vars (car new-vars-args)]
                     [new-args (cadr new-vars-args)])
-                (app-exp (lambda-exp new-vars (caddr func)) new-args))))))
+                (list (closure new-vars (caddr func) (cadddr func)) new-args))))))
 
 ; returns a list of the unrefed vars and the new refed args
 (define  change-references
