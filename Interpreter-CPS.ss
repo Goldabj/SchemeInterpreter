@@ -2,6 +2,12 @@
 ;; Easier to submit to server, probably harder to use in the development process
 ;; Brendan Goldacker and Cameron Metzger
 
+; Everything until interpreter that should be in CPS is. 
+; Ive added TODOs to functions left that we need to change
+; If you change a proc to CPS then mark it with a "; CPS" tag so it it easier to find
+; and we can know that its alread been changed
+; Test every proc that you change as you go
+
 (load "C:/Users/goldacbj/Google Drive/Documents/CSSE/CSSE304/chez-init.ss") 
 ;(load "C:/Users/metzgecj/Desktop/Year3/PLC/chez-init.ss") 
 
@@ -11,7 +17,6 @@
 ;                   |
 ;-------------------+
 
-; parsed expression
 
 ; returns true if x is a literal (anything that evaluates to itself)  CHECK 
 (define literal? 
@@ -81,12 +86,8 @@
         (cases (list-of (lambda (all-cases) (list-of (lambda (single-case) 
                             (and ((list-of expression?) (car x)) ((list-of expression?) (cadr x))))))))])
 
-	
-	
 
-;; environment type definitions
-
-
+; environment datatypes
 (define-datatype environment environment?
   [empty-env-record]
   [extended-env-record
@@ -96,7 +97,6 @@
 
 ; datatype for procedures.  At first there is only one
 ; kind of procedure, but more kinds will be added later.
-
 (define-datatype proc-val proc-val?
     [prim-proc
         (name in-prim?)]
@@ -147,7 +147,6 @@
         (value scheme-value?)
         (k continuation?)]
         
-        
         )
 
 
@@ -169,12 +168,12 @@
 ;                    (apply-k k (cons car-L1 v))]
 ;                [rands-k (proc-val k) 
 ;                    (apply-proc proc-val val k)]
-                [extend-env-record-k (syms env k)  ; v is the map ref values
-                   (apply-k k (extended-env-record syms v env))]
 ;                [if-else-k (then-exp else-exp env k) ; v is the result of the test
 ;                    (if v
 ;                        (eval-exp then-exp env k)
 ;                        (eval-exp else-exp env k))]
+                [extend-env-record-k (syms env k)  ; v is the map ref values
+                   (apply-k k (extended-env-record syms v env))]
                 [list-find-pos-k (sym vals env succed-cps fail-cps k) ; v is pos in list
                     (if (number? v)
                         (succed-cps (list-ref vals v) k)
@@ -200,11 +199,6 @@
 ;                   |
 ;-------------------+
 
-
-; This is a parser for simple Scheme expressions, such as those in EOPL, 3.1 thru 3.3.
-
-; You will want to replace this with your parser that includes more expression types, more options for these types, and error-checking.
-        
 
 ; Procedures to make the parser a little bit saner.
 (define 1st car)
@@ -355,65 +349,12 @@
 
 
 
-;-------------------+
-;                   |
-;   ENVIRONMENTS    |
-;                   |
-;-------------------+
-
-
-
-
-
-; Environment definitions for CSSE 304 Scheme interpreter.  Based on EoPL section 2.3
-
-(define empty-env
-  (lambda ()
-    (empty-env-record)))
-
-
-(define extend-env ;CPS
-  (lambda (syms vals env k)
-    (map-cps ref vals (extend-env-record-k syms env k)))) 
-
-
-(define list-find-position ; CPS
-  (lambda (sym los k)
-      (list-index (lambda (xsym) (eqv? sym xsym)) los k)))
-
-
-(define list-index ; CPS
-  (lambda (pred ls k)
-    (cond
-        [(null? ls) (apply-k k #f)]
-        [(pred (car ls)) (apply-k k 0)]
-        [else 
-            (list-index pred (cdr ls) (list-index-r-k k))])))
-
-(define apply-env-ref ;CPS
-    (lambda (env sym succeed-cps fail-cps k)
-         (cases environment env
-            [empty-env-record ()
-                (fail-cps sym k)]
-      [extended-env-record (syms vals env)
-	        (list-find-position sym syms (list-find-pos-k sym vals env succeed-cps fail-cps k))])))
-
-(define apply-env ;CPS
-  (lambda (env sym succeed-cps fail-cps k)
-        (apply-env-ref env sym succeed-cps fail-cps (deref-k k))))
-
-
-
-
 ;-----------------------+
 ;                       |
 ;   SYNTAX EXPANSION    |
 ;                       |
 ;-----------------------+
 
-
-
-; To be added later
 
 (define syntax-expand 
     (lambda (exp)
@@ -434,7 +375,6 @@
                     (if-exp (syntax-expand test)
                                   (syntax-expand then-exp))]
             [letrec-exp (var-binds bodies) (syntax-expand (list 'let-exp (map list-with-false var-binds) (append (map add-set!-exp var-binds)  bodies)))]
-           ;; [letrec-exp (var-binds bodies) (app-exp (lambda-exp (get-var-binds var-binds) (map syntax-expand bodies)) (append (map add-set!-exp var-binds)  (map syntax-expand (get-binds var-binds))))]
 
             [let*-exp (var-binds body) (letrec ([parse-let* (lambda (var-binds) 
                                                                 (if (null? (cdr var-binds)) 
@@ -517,49 +457,68 @@
 
 ;-------------------+
 ;                   |
-;   INTERPRETER     |
+;   ENVIRONMENTS    |
 ;                   |
 ;-------------------+
 
-; helper funcs
-
-(define map-cps 
-    (lambda (proc-cps ls k)
-        (cond 
-            [(null? ls) (apply-k k '())]
-            [else (proc-cps (car ls) (map-cps-1-k proc-cps ls k))])))
-
-(define apply-env-succeed-cps
-    (lambda (v k)
-        (apply-k k v)))
-
-(define apply-env-fail-cps
-    (lambda (v k)
-        (apply-env-ref global-env v apply-env-succeed-cps apply-env-ref-fail-cps k)))
-
-(define apply-env-ref-fail-cps
-    (lambda (v k) 
-        (eopl:error 'apply-env ; procedure to call if id not in env
-		                                        "variable not found in environment: ~s"
-			                                     id)))
 
 
+; Environment definitions for CSSE 304 Scheme interpreter.  Based on EoPL section 2.3
 
-; top-level-eval evaluates a form in the global environment
+(define empty-env
+  (lambda ()
+    (empty-env-record)))
 
-(define top-level-eval
-  (lambda (form)
-    ; later we may add things that are not expressions.
-    (eval-exp form (empty-env))))
 
-;helper functions for let-exp
-(define get-vars
-    (lambda (ls)
-        (map car (unparse-exp ls))))
+(define extend-env ;CPS
+  (lambda (syms vals env k)
+    (map-cps ref vals (extend-env-record-k syms env k)))) 
 
-(define get-exps
-    (lambda (ls)
-        (map cadr ls)))
+
+(define list-find-position ; CPS
+  (lambda (sym los k)
+      (list-index (lambda (xsym) (eqv? sym xsym)) los k)))
+
+
+(define list-index ; CPS
+  (lambda (pred ls k)
+    (cond
+        [(null? ls) (apply-k k #f)]
+        [(pred (car ls)) (apply-k k 0)]
+        [else 
+            (list-index pred (cdr ls) (list-index-r-k k))])))
+
+(define apply-env-ref ;CPS
+    (lambda (env sym succeed-cps fail-cps k)
+         (cases environment env
+            [empty-env-record ()
+                (fail-cps sym k)]
+      [extended-env-record (syms vals env)
+	        (list-find-position sym syms (list-find-pos-k sym vals env succeed-cps fail-cps k))])))
+
+(define apply-env ;CPS
+  (lambda (env sym succeed-cps fail-cps k)
+        (apply-env-ref env sym succeed-cps fail-cps (deref-k k))))
+
+(define init-env       
+  (extend-env  *prim-proc-names*   
+     (map prim-proc      
+          *prim-proc-names*)
+     (empty-env)))
+
+(define global-env  
+    init-env)
+
+(define reset-global-env (lambda () (set! global-env init-env)))
+
+
+
+
+;-------------------+
+;                   |
+;   INTERPRETER     |
+;                   |
+;-------------------+
 
 
 ; functions for references
@@ -576,8 +535,53 @@
     (lambda (val k)
         (apply-k k (box val))))
 
-; eval-exp is the main component of the interpreter
 
+
+; helper funcs
+
+(define map-cps  ; CPS
+    (lambda (proc-cps ls k)
+        (cond 
+            [(null? ls) (apply-k k '())]
+            [else (proc-cps (car ls) (map-cps-1-k proc-cps ls k))])))
+
+(define apply-env-succeed-cps ;CPS
+    (lambda (v k)
+        (apply-k k v)))
+
+(define apply-env-fail-cps ;CPS
+    (lambda (v k)
+        (apply-env-ref global-env v apply-env-succeed-cps apply-env-ref-fail-cps k)))
+
+(define apply-env-ref-fail-cps ; CPS
+    (lambda (v k) 
+        (eopl:error 'apply-env ; procedure to call if id not in env
+		                                        "variable not found in environment: ~s"
+			                                     id)))
+
+;helper functions for let-exp 
+
+;TODO
+(define get-vars  
+    (lambda (ls)
+        (map car (unparse-exp ls))))
+
+;TODO
+(define get-exps
+    (lambda (ls)
+        (map cadr ls)))
+
+
+
+; top-level-eval evaluates a form in the global environment
+(define top-level-eval ; CPS
+  (lambda (form)
+    (eval-exp form (empty-env) k)))
+
+
+
+; eval-exp is the main component of the interpreter
+;TODO
 (define eval-exp
   (lambda (exp env k)
     (cases expression exp
@@ -627,18 +631,13 @@
         (set! global-env (extend-env (list var) (list (eval-exp body (empty-env))) global-env))]
     [else (eopl:error 'eval-exp "Bad abstract syntax: ~a" exp)])))
 
-; evaluate the list of operands, putting results into a list
-
+;TODO
 (define eval-rands
   (lambda (rands env k)
-       rands ; TODO
-  ))
+      (map (lambda (x) (eval-exp x env)) rands)))
 
-
-;  Apply a procedure to its arguments.
-;  At this point, we only have primitive procedures.  
-;  User-defined procedures will be added later.
-
+; apply a proc and its arguments
+;TODO
 (define apply-proc
   (lambda (proc-value args)
     (cases proc-val proc-value
@@ -653,6 +652,9 @@
                    "Attempt to apply bad procedure: ~s" 
                     proc-value)])))
 
+; gets a flat list of the vars and the corresponding amount of args 
+; if more args than vars then the last set of args is put into a list
+;TODO
 (define flatten-vars-args 
     (lambda (vars args)
         (cond 
@@ -668,11 +670,14 @@
                                             (list (list (car vars) (cdr vars)) (cons (car args) (list (cdr args)))))
                                         (let ([final-vars-args (flatten-vars-args (cdr vars) (cdr args))])
                                           (list (cons (car vars) (car final-vars-args)) (cons (car args) (cadr final-vars-args))))))])))
-
+;TODO
 (define eval-bodies 
     (lambda (bodies env k)
-        bodies ; TODO
-    ))
+         (if (null? (cdr bodies))
+            (eval-exp (car bodies) env)
+            (begin (eval-exp (car bodies) env)
+                (eval-bodies (cdr bodies) env))))) 
+
 
 (define *prim-proc-names* '(+ - * / add1 sub1 zero? not = < > <= >= cons list null? assq eq? eqv? append list-tail
                             equal? atom? length list->vector list? pair? procedure? vector->list vector 
@@ -690,21 +695,7 @@
 
 (define *prim-proc-multiple '(+ - * / list vector apply map append))
 
-(define init-env         ; for now, our initial global environment only contains 
-  (extend-env            ; procedure names.  Recall that an environment associates
-     *prim-proc-names*   ;  a value (not an expression) with an identifier.
-     (map prim-proc      
-          *prim-proc-names*)
-     (empty-env)))
-
-(define global-env  
-    init-env)
-
-(define reset-global-env (lambda () (set! global-env init-env)))
-
-; Usually an interpreter must define each 
-; built-in procedure individually.  We are "cheating" a little bit.
-
+; TODO
 (define apply-prim-proc
   (lambda (prim-proc args)
      ;error checking 
@@ -791,14 +782,14 @@
   (lambda ()
     (display "--> ")
     ;; notice that we don't save changes to the environment...
-    (let ([answer (un-closure (top-level-eval (syntax-expand (parse-exp (read)))))])
+    (let ([answer (top-level-eval (syntax-expand (parse-exp (read))))])
       ;; TODO: are there answers that should display differently
         (eopl:pretty-print answer) (newline)
       (rep))))  ; tail-recursive, so stack doesn't grow.
 
-(define eval-one-exp
-  (lambda (x) (top-level-eval (syntax-expand (parse-exp x)))))
 
+(define eval-one-exp 
+  (lambda (x) (un-closure (top-level-eval (syntax-expand (parse-exp x))))))
 
 
 (define un-closure 
