@@ -619,10 +619,11 @@
         (set! global-env (extend-env (list var) (list (eval-exp body (empty-env))) global-env k))]
     [else (eopl:error 'eval-exp "Bad abstract syntax: ~a" exp)])))
 
-;TODO
+;TODO Need to Test
 (define eval-rands
   (lambda (rands env k)
-      (map (lambda (x) (eval-exp x env k)) rands)))
+      (eval-exp rands 
+      (map-cps (lambda (x) (eval-exp x env (init-k))) rands k))))
 
 ; apply a proc and its arguments
 ;TODO
@@ -649,7 +650,7 @@
             [(null? vars) (if (not (null? args)) 
                                 (eopl:error 'flatten-vars-args "lamnbda expexted no args, but got ~s" args)
                                 (list '() '()))]
-            [(symbol? vars) (list (list vars) (list args))]
+            [(symbol? vars) (list (list vars) (list args))] 
             [(symbol? (car vars)) (if (and (null? (cdr vars)) (not (null? (cdr args))))
                                     (eopl:error 'flatten-vars-args "incorrect amount of arguments to procedure ~s" args)
                                     (if (symbol? (cdr vars))
