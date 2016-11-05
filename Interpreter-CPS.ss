@@ -8,8 +8,8 @@
 ; and we can know that its alread been changed
 ; Test every proc that you change as you go
 
-;(load "C:/Users/goldacbj/Google Drive/Documents/CSSE/CSSE304/chez-init.ss") 
-(load "C:/Users/metzgecj/Desktop/Year3/PLC/chez-init.ss") 
+(load "C:/Users/goldacbj/Google Drive/Documents/CSSE/CSSE304/chez-init.ss") 
+;(load "C:/Users/metzgecj/Desktop/Year3/PLC/chez-init.ss") 
 
 ;-------------------+
 ;                   |
@@ -252,7 +252,8 @@
                         (eval-exp else-exp env k))]
                 [if-exp-k (then-exp env k) ; v is the result of the test
                     (if v
-                        (eval-exp then-exp env k))]
+                        (eval-exp then-exp env k)
+                        (apply-k k (void)))]
                 [extend-env-record-k (syms env k)  ; v is the map ref values
                    (apply-k k (extended-env-record syms v env))]
                 [list-find-pos-k (sym vals env succed-cps fail-cps k) ; v is pos in list
@@ -279,7 +280,8 @@
                     (eval-bodies bodies v k)]
                 [while-k (test bodies exp env k) ; v will be the result of the test
                     (if v 
-                        (eval-bodies bodies env (while-2-k exp env k)))]
+                        (eval-bodies bodies env (while-2-k exp env k))
+                        (apply-k k (void)))]
                 [while-2-k (exp env k) ; v is the result of eval-bodies, will not need to use
                     (eval-exp exp env k)]
                 [set-ref-eval-exp-k (val-exp env k) ; v is the orignial var value
@@ -741,7 +743,7 @@
             (apply-env-ref env var apply-env-succeed-cps apply-env-fail-cps 
                                 (set-ref-eval-exp-k val-exp env k))]
         [define-exp (var body) ; CPS
-            (eval-exp body (empty-env) (define-extend-env-k (var k)))] 
+            (eval-exp body (empty-env) (define-extend-env-k var k))] 
         [else (eopl:error 'eval-exp "Bad abstract syntax: ~a" exp)])))
 
 
@@ -899,8 +901,8 @@
             [(list) (apply list args)]
             [(vector) (apply vector args)]
             [(append) (apply append args)]
-            [(apply) (apply-proc (car args) (cadr args))]
-            [(map) (map (lambda (e) (apply-proc (car args) (list e))) (cadr args))]
+            [(apply) (apply-proc (car args) (cadr args) k)]
+            [(map) (map-cps (lambda (e k) (apply-proc (car args) (list e) k)) (cadr args) k)]
             [else (eopl:error 'apply-prim-proc "programming error multiple")]))))
 
         
