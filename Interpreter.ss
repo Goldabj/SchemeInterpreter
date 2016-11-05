@@ -2,8 +2,8 @@
 ;; Easier to submit to server, probably harder to use in the development process
 ;; Brendan Goldacker and Cameron Metzger
 
-;(load "C:/Users/goldacbj/Google Drive/Documents/CSSE/CSSE304/chez-init.ss") 
-(load "C:/Users/metzgecj/Desktop/Year3/PLC/chez-init.ss") 
+(load "C:/Users/goldacbj/Google Drive/Documents/CSSE/CSSE304/chez-init.ss") 
+;(load "C:/Users/metzgecj/Desktop/Year3/PLC/chez-init.ss") 
 
 ;-------------------+
 ;                   |
@@ -668,13 +668,8 @@
                                                     [(list) (apply list args)]
                                                     [(vector) (apply vector args)]
                                                     [(append) (apply append args)]
-                                                   ;; [(apply) (apply (lambda (ls) (apply-prim-proc (unparse-exp (car args)) ls)) (cdr args))]
-                                                    [(apply) (if (equal? 'closure (caar args)) 
-                                                                        (apply-proc (car args) (cadr args))
-                                                                        (apply (lambda (ls) (apply-prim-proc (unparse-exp (car args)) ls)) (cdr args)))]
-                                                    [(map) (if (equal? 'closure (caar args))
-                                                            (map (lambda (x) (apply-proc (car args) (list x))) (cadr args))
-                                                            (map (lambda (x) (apply-prim-proc (unparse-exp (car args)) (list x))) (cadr args)))]
+                                                    [(apply) (apply-proc (car args) (cadr args))]
+                                                    [(map) (map (lambda (e) (apply-proc (car args) (list e))) (cadr args))]
                                                     [else (eopl:error 'apply-prim-proc "programming error multiple")])])))
         
 
