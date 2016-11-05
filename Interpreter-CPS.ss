@@ -8,8 +8,8 @@
 ; and we can know that its alread been changed
 ; Test every proc that you change as you go
 
-(load "C:/Users/goldacbj/Google Drive/Documents/CSSE/CSSE304/chez-init.ss") 
-;(load "C:/Users/metzgecj/Desktop/Year3/PLC/chez-init.ss") 
+;(load "C:/Users/goldacbj/Google Drive/Documents/CSSE/CSSE304/chez-init.ss") 
+(load "C:/Users/metzgecj/Desktop/Year3/PLC/chez-init.ss") 
 
 ;-------------------+
 ;                   |
@@ -104,7 +104,9 @@
    [closure
         (vars (lambda (x) (or  (and (pair? x) (not (list? x))) (null? x) (symbol? x) ((list-of symbol?) x))))
         (bodies (list-of expression?))
-        (env environment?)])
+        (env environment?)]
+    [continuation-proc
+        (k continuation?)])
 
 (define-datatype continuation continuation?
     [init-k]
@@ -758,6 +760,8 @@
       [closure (vars bodies env) ; CPS
         (flatten-vars-args vars args (closure-k bodies env k))] 
       [prim-proc (op) (apply-prim-proc op args k)] ; CPS
+      [continuation-proc (k)
+        (apply-k k (car args))]
       [else (eopl:error 'apply-proc
                    "Attempt to apply bad procedure: ~s" 
                     proc-value)])))
@@ -789,18 +793,19 @@
 (define *prim-proc-names* '(+ - * / add1 sub1 zero? not = < > <= >= cons list null? assq eq? eqv? append list-tail
                             equal? atom? length list->vector list? pair? procedure? vector->list vector 
                             make-vector vector-ref vector? number? symbol? set-car! set-cdr! vector-set! member
-                            display newline car cdr caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr apply map quotient))
+                            display newline car cdr caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr 
+                            apply map quotient call/cc exit-list))
 
 (define *prim-proc-zero '(newline))
 
 (define *prim-proc-one '(add1 sub1 zero? not car cdr caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr null? 
-                                atom? length list->vector vector? list? pair? procedure? vector->list number? symbol?))
+                                atom? length list->vector vector? list? pair? procedure? vector->list number? symbol? call/cc))
 
 (define *prim-proc-two '(= < > <= >= cons eq? equal? eqv? make-vector vector-ref set-car! set-cdr! assq member quotient list-tail))
 
 (define *prim-proc-three '(vector-set!))
 
-(define *prim-proc-multiple '(+ - * / list vector apply map append))
+(define *prim-proc-multiple '(+ - * / list vector apply map append exit-list))
 
 (define init-env       
   (extend-env  *prim-proc-names*   
@@ -822,88 +827,90 @@
 (define apply-prim-proc-0-cps ; CPS
     (lambda (prim-proc args k)
         (if (not (null? args))
-            (eopl:error 'apply-prim-proc "incorrect amount of arguments to ~s" prim-proc)
+            (eopl:error 'apply-prim-proc-0 "incorrect amount of arguments to ~s" prim-proc)
             (apply-k k (newline)))))
 
 (define apply-prim-proc-1-cps ; CPS 
     (lambda (prim-proc args k)
         (if (not (equal? 1 (length args)))
-            (eopl:error 'apply-prim-proc "incorrect amount of arguments to ~s" prim-proc)
-            (apply-k k (case prim-proc 
-                [(add1) (+ (1st args) 1)]
-                [(sub1) (- (1st args) 1)]
-                [(zero?) (zero? (1st args))]
-                [(not) (not (1st args))]
-                [(car) (car (1st args))]
-                [(cdr) (cdr (1st args))]
-                [(caar) (caar (1st args))]
-                [(cadr) (cadr (1st args))]
-                [(cdar) (cdar (1st args))]
-                [(cddr) (cddr (1st args))]
-                [(caaar) (caaar (1st args))]
-                [(caadr) (caadr (1st args))]
-                [(cadar) (cadar (1st args))]
-                [(caddr) (caddr (1st args))]
-                [(cdaar) (cdaar (1st args))]
-                [(cdadr) (cdadr (1st args))]
-                [(cddar) (cddar (1st args))]
-                [(cdddr) (cdddr (1st args))]
-                [(null?) (null? (1st args))]
-                [(atom?) (atom? (1st args))]
-                [(length) (length (1st args))]  
-                [(list->vector) (list->vector (1st args))]
-                [(vector?) (vector? (1st args))]
-                [(list?) (list? (1st args))]
-                [(pair?) (pair? (1st args))]
-                [(procedure?) (proc-val? (1st args))]
-                [(vector->list) (vector->list (1st args))]
-                [(number?) (number? (1st args))]
-                [(symbol?) (symbol? (1st args))]
-                [else (eopl:error 'apply-prim-proc "programming error one")])))))
+            (eopl:error 'apply-prim-proc-1 "incorrect amount of arguments to ~s" prim-proc)
+            (case prim-proc 
+                [(add1) (apply-k k (+ (1st args) 1))]
+                [(sub1) (apply-k k (- (1st args) 1))]
+                [(zero?) (apply-k k (zero? (1st args)))]
+                [(not) (apply-k k (not (1st args)))]
+                [(car) (apply-k k (car (1st args)))]
+                [(cdr) (apply-k k (cdr (1st args)))]
+                [(caar) (apply-k k (caar (1st args)))]
+                [(cadr) (apply-k k (cadr (1st args)))]
+                [(cdar) (apply-k k (cdar (1st args)))]
+                [(cddr) (apply-k k (cddr (1st args)))]
+                [(caaar) (apply-k k (caaar (1st args)))]
+                [(caadr) (apply-k k (caadr (1st args)))]
+                [(cadar) (apply-k k (cadar (1st args)))]
+                [(caddr) (apply-k k (caddr (1st args)))]
+                [(cdaar) (apply-k k (cdaar (1st args)))]
+                [(cdadr) (apply-k k (cdadr (1st args)))]
+                [(cddar) (apply-k k (cddar (1st args)))]
+                [(cdddr) (apply-k k (cdddr (1st args)))]
+                [(null?) (apply-k k (null? (1st args)))]
+                [(atom?) (apply-k k (atom? (1st args)))]
+                [(length) (apply-k k (length (1st args)))]  
+                [(list->vector) (apply-k k (list->vector (1st args)))]
+                [(vector?) (apply-k k (vector? (1st args)))]
+                [(list?) (apply-k k (list? (1st args)))]
+                [(pair?) (apply-k k (pair? (1st args)))]
+                [(procedure?) (apply-k k (proc-val? (1st args)))]
+                [(vector->list) (apply-k k (vector->list (1st args)))]
+                [(number?) (apply-k k (number? (1st args)))]
+                [(symbol?) (apply-k k (symbol? (1st args)))]
+                [(call/cc) (apply-proc (1st args) (list (continuation-proc k)) k)]
+                [else (eopl:error 'apply-prim-proc-1 "programming error one")]))))
 
 (define apply-prim-proc-2-cps ; CPS ;
     (lambda (prim-proc args k)
         (if (not (equal? 2 (length args)))
-            (eopl:error 'apply-prim-proc "incorrect amount of arguments to ~s" prim-proc)
-            (apply-k k (case prim-proc
-                [(=) (= (1st args) (2nd args))]
-                [(<) (< (1st args) (2nd args))]
-                [(>) (> (1st args) (2nd args))]
-                [(<=) (<= (1st args) (2nd args))]
-                [(>=) (>= (1st args) (2nd args))]
-                [(cons) (cons (1st args) (2nd args))]
-                [(eq?) (eq? (1st args) (2nd args))]
-                [(equal?) (equal? (1st args) (2nd args))]
-                [(eqv?) (eqv? (1st args) (2nd args))]
-                [(make-vector) (make-vector (1st args) (2nd args))]
-                [(vector-ref) (vector-ref (1st args) (2nd args))]
-                [(set-car!) (set-car! (1st args) (2nd args))]
-                [(set-cdr!) (set-cdr! (1st args) (2nd args))]
-                [(member) (member (1st args) (2nd args))]
-                [(list-tail) (list-tail (1st args) (2nd args))]
-                [(quotient) (quotient (1st args) (2nd args))]
-                [(assq) (assq (1st args) (2nd args))]
-                [else (eopl:error 'apply-prim-proc "programming error two")])))))
+            (eopl:error 'apply-prim-proc-2 "incorrect amount of arguments to ~s" prim-proc)
+            (case prim-proc
+                [(=) (apply-k k (= (1st args) (2nd args)))]
+                [(<) (apply-k k (< (1st args) (2nd args)))]
+                [(>) (apply-k k (> (1st args) (2nd args)))]
+                [(<=) (apply-k k (<= (1st args) (2nd args)))]
+                [(>=) (apply-k k (>= (1st args) (2nd args)))]
+                [(cons) (apply-k k (cons (1st args) (2nd args)))]
+                [(eq?) (apply-k k (eq? (1st args) (2nd args)))]
+                [(equal?) (apply-k k (equal? (1st args) (2nd args)))]
+                [(eqv?) (apply-k k (eqv? (1st args) (2nd args)))]
+                [(make-vector) (apply-k k (make-vector (1st args) (2nd args)))]
+                [(vector-ref) (apply-k k (vector-ref (1st args) (2nd args)))]
+                [(set-car!) (apply-k k (set-car! (1st args) (2nd args)))]
+                [(set-cdr!) (apply-k k (set-cdr! (1st args) (2nd args)))]
+                [(member) (apply-k k (member (1st args) (2nd args)))]
+                [(list-tail) (apply-k k (list-tail (1st args) (2nd args)))]
+                [(quotient) (apply-k k (quotient (1st args) (2nd args)))]
+                [(assq) (apply-k k (assq (1st args) (2nd args)))]
+                [else (eopl:error 'apply-prim-proc-2 "programming error two")]))))
 
 (define apply-prim-proc-3-cps ; CPS
     (lambda (prim-proc args k)
         (if (not (equal? 3 (length args)))
-            (eopl:error 'apply-prim-proc "incorrect amount of arguments to ~s" prim-proc)
+            (eopl:error 'apply-prim-proc-3 "incorrect amount of arguments to ~s" prim-proc)
             (apply-k k (vector-set! (1st args) (2nd args) (3rd args))))))
 
 (define apply-prim-proc-multi-cps ; CPS
     (lambda (prim-proc args k)
-       (apply-k k  (case prim-proc
-            [(+) (apply + args)]
-            [(-) (apply - args)]
-            [(*) (apply * args)]
-            [(/) (apply / args)]
-            [(list) (apply list args)]
-            [(vector) (apply vector args)]
-            [(append) (apply append args)]
+       (case prim-proc
+            [(+) (apply-k k (apply + args))]
+            [(-) (apply-k k (apply - args))]
+            [(*) (apply-k k (apply * args))]
+            [(/) (apply-k k (apply / args))]
+            [(list) (apply-k k (apply list args))]
+            [(vector) (apply-k k (apply vector args))]
+            [(append) (apply-k k (apply append args))]
             [(apply) (apply-proc (car args) (cadr args) k)]
             [(map) (map-cps (lambda (e k) (apply-proc (car args) (list e) k)) (cadr args) k)]
-            [else (eopl:error 'apply-prim-proc "programming error multiple")]))))
+            [(exit-list) (apply-k (init-k) args)]
+            [else (eopl:error 'apply-prim-proc-m "programming error multiple")])))
 
         
 
