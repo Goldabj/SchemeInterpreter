@@ -8,8 +8,8 @@
 ; and we can know that its alread been changed
 ; Test every proc that you change as you go
 
-(load "C:/Users/goldacbj/Google Drive/Documents/CSSE/CSSE304/chez-init.ss") 
-;(load "C:/Users/metzgecj/Desktop/Year3/PLC/chez-init.ss") 
+;(load "C:/Users/goldacbj/Google Drive/Documents/CSSE/CSSE304/chez-init.ss") 
+(load "C:/Users/metzgecj/Desktop/Year3/PLC/chez-init.ss") 
 
 ;-------------------+
 ;                   |
@@ -293,7 +293,7 @@
                 [closure-k (bodies env k) ; v is the list of vars and args 
                     (let ([vars (car v)]
                             [args (cadr v)])
-                        (extend-env vars args env (closure-2-k bodies k)))]
+                        (extend-env vars args env (closure-2-k bodies env k)))]
                 [closure-2-k (bodies env k) ; v is the new env 
                     (eval-bodies bodies v k)]
                 [flatten-vars-args-k (vars args k) ; v is the final vars and args 
@@ -318,7 +318,7 @@
                         (member-cps prim-proc *prim-proc-multiple (apply-prim-proc-multi-k prim-proc args k)))]
                 [apply-prim-proc-multi-k (prim-proc args k) ; v is the value of member? of prim-proc#
                     (if v 
-                        (apply-prim-proc-mulit-cps prim-proc args k)
+                        (apply-prim-proc-multi-cps prim-proc args k)
                         (eopl:error 'apply-prim-proc "prim-proc not defined ~s" prim-proc))]
             )
             (apply k v))))
@@ -728,7 +728,7 @@
         [if-exp (test-exp then-exp) ;CPS
             (eval-exp test-exp env (if-exp-k then-exp env k))]
         [lambda-exp (vars bodies) ;CPS
-            (closure vars bodies env)]
+            (apply-k k (closure vars bodies env))]
         [let-exp (var-binds bodies) ; CPS
             (get-exps var-binds (let-eval-rands-k bodies env k))]
             ;(let-eval-rands-k (bodies var-binds env k) ) ; v will be the exps from let ;want to eval-rands of v then go to get-vars-k
@@ -813,8 +813,8 @@
 
 
 (define apply-prim-proc ; CPS
-  (lambda (prim-proc args)
-    (member-cps prim-proc *prim-proc-zero (apply-prim-proc-0-k prim-proc args)))) 
+  (lambda (prim-proc args k)
+    (member-cps prim-proc *prim-proc-zero (apply-prim-proc-0-k prim-proc args k)))) 
 
 
 (define apply-prim-proc-0-cps ; CPS
@@ -926,7 +926,8 @@
             [(null? x) x]
             [(list? x) (if (equal? (car x) 'closure)
                             '<procedure>
-                            (cons (un-closure (car x)) (un-closure (cdr x))))])))
+                            (cons (un-closure (car x)) (un-closure (cdr x))))]
+            [else x])))
     
 
 
