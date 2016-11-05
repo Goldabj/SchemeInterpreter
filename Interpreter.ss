@@ -453,7 +453,7 @@
 ;helper functions for let-exp
 (define get-vars
     (lambda (ls)
-        (map car (unparse-exp ls))))
+        (map car ls)))
 
 (define get-exps
     (lambda (ls)

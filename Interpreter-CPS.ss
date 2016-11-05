@@ -8,8 +8,8 @@
 ; and we can know that its alread been changed
 ; Test every proc that you change as you go
 
-;(load "C:/Users/goldacbj/Google Drive/Documents/CSSE/CSSE304/chez-init.ss") 
-(load "C:/Users/metzgecj/Desktop/Year3/PLC/chez-init.ss") 
+(load "C:/Users/goldacbj/Google Drive/Documents/CSSE/CSSE304/chez-init.ss") 
+;(load "C:/Users/metzgecj/Desktop/Year3/PLC/chez-init.ss") 
 
 ;-------------------+
 ;                   |
@@ -22,6 +22,12 @@
 (define literal? 
     (lambda (x)
         (or (number? x) (string? x) (boolean? x) (vector? x) (null? x) (and (list? x) (equal? 'quote (car x)) (or (list? (cadr x)) (symbol? (cadr x)) (vector? (cadr x)))))))
+
+(define in-prim? 
+    (lambda (x)
+        (if (member x *prim-proc-names*)
+            #t
+            (proc-val? x))))
 
 
 
@@ -98,14 +104,7 @@
    [closure
         (vars (lambda (x) (or  (and (pair? x) (not (list? x))) (null? x) (symbol? x) ((list-of symbol?) x))))
         (bodies (list-of expression?))
-        (env environment?)
-        (k continuation?)])
-
-(define in-prim? 
-    (lambda (x)
-        (if (member x *prim-proc-names*)
-            #t
-            (proc-val? x))))
+        (env environment?)])
 
 (define-datatype continuation continuation?
     [init-k]
@@ -173,7 +172,7 @@
 ;                        (eval-exp else-exp env k))]
                 [extend-env-record-k (syms env k)  ; v is the map ref values
                    (apply-k k (extended-env-record syms v env))]
-                [list-find-pos-k (sym vals env succed-cps fail-cps k) ; v is pos in list ;;mess-up here
+                [list-find-pos-k (sym vals env succed-cps fail-cps k) ; v is pos in list
                     (if (number? v)
                         (succed-cps (list-ref vals v) k)
                         (apply-env-ref env sym succed-cps fail-cps k))]
@@ -548,16 +547,21 @@
 			                                     id)))
 
 ;helper functions for let-exp 
+(define car-cps ;CPS
+    (lambda (v k)
+        (apply-k k (car v))))
 
-;TODO
-(define get-vars  
-    (lambda (ls)
-        (map car (unparse-exp ls))))
+(define cadr-cps ;CPS
+    (lambda (v k)
+        (apply-k k (cadr v))))
 
-;TODO
-(define get-exps
-    (lambda (ls)
-        (map cadr ls)))
+(define get-vars  ; CPS
+    (lambda (ls k)
+        (map-cps car-cps ls k)))
+
+(define get-exps  ; CPs
+    (lambda (ls k)
+        (map-cps cadr-cps ls k)))
 
 
 
@@ -579,11 +583,8 @@
                     datum)]
       [var-exp (id)
 				(apply-env env id; look up its value.
-      	   (lambda (x) x) ; procedure to call if id is in the environment 
-           (lambda () (apply-env-ref global-env id (lambda (x) x) 
-                                              (lambda () (eopl:error 'apply-env ; procedure to call if id not in env
-		                                        "variable not found in environment: ~s"
-			                                     id)) k)) k)] 
+      	   apply-env-succeed-cps apply-env-fail-cps ; procedure to call if id is in the environment 
+                )] 
       [app-exp (rator rands)
         (let ([proc-value (eval-exp rator env k)]
               [args (eval-rands rands env k)])
